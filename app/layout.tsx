@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'AvtoEmir — автошкола в Туркестане и Карнаке',
   description:
     'AvtoEmir: запись в автошколу (категории B, B1, C, C1), теория ПДД, тесты, запись на вождение, чат с инструктором. Қазақша / Русский.',
+ manifest: '/manifest.json',
   generator: 'v0.app',
   icons: {
     icon: [
