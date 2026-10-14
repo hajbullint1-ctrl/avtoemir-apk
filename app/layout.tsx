@@ -39,6 +39,11 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <StoreProvider>{children}</StoreProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`,
+          }}
+        />
       </body>
     </html>
   )
