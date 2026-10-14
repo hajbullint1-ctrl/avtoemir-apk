@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Building2, Car, ClipboardCheck, MessageSquareText, Smartphone, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Building2, Car, ClipboardCheck, Lock, MessageSquareText, Smartphone, Users } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor } from './admin-content'
 import { useStore } from '@/lib/store'
+import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
 import type { L } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JSX.Element }[] = [
   { id: 'students', label: { ru: 'Студенты и документы', kk: 'Студенттер мен құжаттар' }, icon: Users, Comp: AdminStudents },
@@ -19,11 +21,59 @@ const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JS
   { id: 'reviews', label: { ru: 'Отзывы', kk: 'Пікірлер' }, icon: MessageSquareText, Comp: ReviewsEditor },
 ]
 
+function AdminGate({ onUnlock }: { onUnlock: () => void }) {
+  const { tl } = useStore()
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState(false)
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-lg">
+        <div className="mb-4 flex flex-col items-center gap-2 text-center">
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+            <Lock className="size-6" aria-hidden="true" />
+          </span>
+          <h1 className="text-lg font-extrabold">{tl({ ru: 'Панель администратора', kk: 'Әкімші панелі' })}</h1>
+          <p className="text-sm text-muted-foreground">{tl({ ru: 'Введите пароль для доступа', kk: 'Кіру үшін құпия сөзді енгізіңіз' })}</p>
+        </div>
+        <form className="flex flex-col gap-3" onSubmit={(e) => {
+          e.preventDefault()
+          if (checkAdminPassword(password)) { setAdminSession(); onUnlock() } else setError(true)
+        }}>
+          <input type="password" autoFocus value={password} onChange={(e) => { setPassword(e.target.value); setError(false) }}
+            placeholder="••••••••" className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-primary focus:ring-2" />
+          {error && <p className="text-sm text-destructive" role="alert">{tl({ ru: 'Неверный пароль', kk: 'Құпия сөз қате' })}</p>}
+          <Button type="submit" className="w-full">{tl({ ru: 'Войти', kk: 'Кіру' })}</Button>
+        </form>
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          <Link href="/" className="underline-offset-2 hover:underline">{tl({ ru: 'Вернуться в приложение', kk: 'Қолданбаға оралу' })}</Link>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function AdminApp() {
   const { tl, students } = useStore()
   const [active, setActive] = useState('students')
+  const [unlocked, setUnlocked] = useState(false)
+  const [checked, setChecked] = useState(false)
   const current = sections.find((s) => s.id === active)!
   const pending = students.filter((s) => s.status === 'pending').length
+
+  useEffect(() => {
+    setUnlocked(hasAdminSession())
+    setChecked(true)
+  }, [])
+
+  if (!checked) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!unlocked) return <AdminGate onUnlock={() => setUnlocked(true)} />
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/50 lg:flex-row">
@@ -47,15 +97,11 @@ export function AdminApp() {
               const on = s.id === active
               return (
                 <li key={s.id}>
-                  <button
-                    type="button"
-                    aria-current={on ? 'page' : undefined}
-                    onClick={() => setActive(s.id)}
+                  <button type="button" aria-current={on ? 'page' : undefined} onClick={() => setActive(s.id)}
                     className={cn(
                       'flex w-full items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       on ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'opacity-80 hover:bg-sidebar-accent/60 hover:opacity-100',
-                    )}
-                  >
+                    )}>
                     <Icon className="size-4 shrink-0" aria-hidden="true" />
                     <span className="flex-1 text-left">{tl(s.label)}</span>
                     {s.id === 'students' && pending > 0 && (
@@ -68,16 +114,12 @@ export function AdminApp() {
           </ul>
         </nav>
         <div className="hidden px-4 lg:block">
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-lg border border-sidebar-border px-3 py-2 text-sm opacity-80 hover:opacity-100"
-          >
+          <Link href="/" className="flex items-center gap-2 rounded-lg border border-sidebar-border px-3 py-2 text-sm opacity-80 hover:opacity-100">
             <Smartphone className="size-4" aria-hidden="true" />
             {tl({ ru: 'Приложение студента', kk: 'Студент қосымшасы' })}
           </Link>
         </div>
       </aside>
-
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b bg-card px-5 py-4">
           <div className="flex items-center gap-3">
