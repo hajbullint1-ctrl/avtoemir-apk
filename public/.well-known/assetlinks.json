@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "twa.project.avtoemir",
+    "sha256_cert_fingerprints": [
+      "99:1F:2B:0C:C7:49:17:A9:59:37:58:FC:D9:76:FF:41:E7:B2:DB:FD:7B:A5:45:5E:4C:12:B0:B7:5D:E6:07:2D"
+    ]
+  }
+}]
