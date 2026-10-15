@@ -54,6 +54,12 @@ function Exam({ onDone }: { onDone: () => void }) {
       </div>
       <ProgressBar value={((index + (answered ? 1 : 0)) / questions.length) * 100} className="mb-4" label={t('question')} />
       <h2 className="mb-4 text-base font-semibold leading-snug text-pretty">{tl(q.q)}</h2>
+      {q.imageUrl ? (
+        <div className="mb-4 overflow-hidden rounded-xl border bg-muted/30">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={q.imageUrl} alt="" className="mx-auto max-h-48 w-full object-contain p-2" />
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2" role="radiogroup" aria-label={tl(q.q)}>
         {q.options.map((opt, i) => {
           const isCorrect = i === q.correct
