@@ -140,6 +140,40 @@ export function TabAbout() {
           </span>
         </div>
         <div className="flex flex-col gap-2">
+          {school.phoneEnrollment ? (
+            <a
+              href={`tel:${school.phoneEnrollment.replace(/[^\d+]/g, '')}`}
+              className="flex items-center justify-between rounded-xl border border-primary/30 bg-accent/40 p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {tl({ ru: 'Запись в автошколу', kk: 'Автомектепке жазылу' })}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  {school.phoneEnrollment}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-medium text-primary">{t('call')}</span>
+            </a>
+          ) : null}
+          {school.phoneSupport ? (
+            <a
+              href={`tel:${school.phoneSupport.replace(/[^\d+]/g, '')}`}
+              className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {tl({ ru: 'Служба поддержки приложения', kk: 'Қолданба қолдау қызметі' })}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  {school.phoneSupport}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-medium text-primary">{t('call')}</span>
+            </a>
+          ) : null}
           {school.phones.map((p) => (
             <a
               key={p}
