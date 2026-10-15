@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Eye, EyeOff, Plus, Save, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Eye, EyeOff, ImagePlus, Plus, Save, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Stars } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
-import { CATEGORIES, type Category, type Question, type School } from '@/lib/data'
+import { CATEGORIES, type Category, type Question, type School, type TheoryLesson, type TheoryTopic } from '@/lib/data'
 import type { L } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +73,15 @@ function SaveButton({ onClick }: { onClick: () => void }) {
   )
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 export function SchoolEditor() {
   const { school, setSchool, tl } = useStore()
   const [draft, setDraft] = useState<School>(school)
@@ -91,16 +100,65 @@ export function SchoolEditor() {
             className={inputCls}
           />
         </Field>
+        <Field label="Instagram">
+          <input
+            type="url"
+            value={draft.instagram}
+            onChange={(e) => setDraft({ ...draft, instagram: e.target.value })}
+            placeholder="https://www.instagram.com/..."
+            className={inputCls}
+          />
+        </Field>
+        <Field label={tl({ ru: 'Официальный сайт', kk: 'Ресми сайт' })}>
+          <input
+            type="url"
+            value={draft.website}
+            onChange={(e) => setDraft({ ...draft, website: e.target.value })}
+            placeholder="https://..."
+            className={inputCls}
+          />
+        </Field>
         <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-semibold">{tl({ ru: 'Филиалы', kk: 'Филиалдар' })}</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">{tl({ ru: 'Филиалы', kk: 'Филиалдар' })}</h3>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setDraft({
+                  ...draft,
+                  branches: [
+                    ...draft.branches,
+                    { id: uid(), city: emptyL(), address: emptyL(), link: '' },
+                  ],
+                })
+              }
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {tl({ ru: 'Добавить филиал', kk: 'Филиал қосу' })}
+            </Button>
+          </div>
           {draft.branches.map((b, i) => {
             const update = (patch: Partial<typeof b>) =>
               setDraft({ ...draft, branches: draft.branches.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
             return (
               <div key={b.id} className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={tl({ ru: 'Удалить филиал', kk: 'Филиалды жою' })}
+                    disabled={draft.branches.length <= 1}
+                    onClick={() => setDraft({ ...draft, branches: draft.branches.filter((_, j) => j !== i) })}
+                  >
+                    <Trash2 className="size-4 text-destructive" aria-hidden="true" />
+                  </Button>
+                </div>
                 <BiInput label={tl({ ru: 'Город', kk: 'Қала' })} value={b.city} onChange={(city) => update({ city })} />
                 <BiInput label={tl({ ru: 'Адрес', kk: 'Мекенжай' })} value={b.address} onChange={(address) => update({ address })} />
-                <Field label={tl({ ru: 'Ссылка 2GIS', kk: '2GIS сілтемесі' })}>
+                <Field label={tl({ ru: 'Ссылка 2GIS (оставьте пустой, если нет)', kk: '2GIS сілтемесі (жоқ болса бос қалдырыңыз)' })}>
                   <input type="url" value={b.link} onChange={(e) => update({ link: e.target.value })} className={inputCls} />
                 </Field>
               </div>
@@ -112,84 +170,216 @@ export function SchoolEditor() {
   )
 }
 
+function LessonEditor({
+  lesson,
+  onChange,
+  onRemove,
+}: {
+  lesson: TheoryLesson
+  onChange: (l: TheoryLesson) => void
+  onRemove: () => void
+}) {
+  const { tl } = useStore()
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground">{tl({ ru: 'Урок', kk: 'Сабақ' })}</span>
+        <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label={tl({ ru: 'Удалить урок', kk: 'Сабақты жою' })}>
+          <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+        </Button>
+      </div>
+      <BiInput label={tl({ ru: 'Заголовок урока', kk: 'Сабақ тақырыбы' })} value={lesson.title} onChange={(title) => onChange({ ...lesson, title })} />
+      <BiInput label={tl({ ru: 'Текст урока', kk: 'Сабақ мәтіні' })} value={lesson.body} onChange={(body) => onChange({ ...lesson, body })} multiline />
+    </div>
+  )
+}
+
 export function TheoryEditor() {
   const { theory, setTheory, tl } = useStore()
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [title, setTitle] = useState<L>(emptyL())
-  const [lessons, setLessons] = useState(3)
+
+  const updateTopic = (id: string, patch: Partial<TheoryTopic> | ((t: TheoryTopic) => TheoryTopic)) => {
+    setTheory(
+      theory.map((t) => {
+        if (t.id !== id) return t
+        return typeof patch === 'function' ? patch(t) : { ...t, ...patch }
+      }),
+    )
+  }
+
   return (
-    <Card title={tl({ ru: 'Темы теории', kk: 'Теория тақырыптары' })}>
-      <ul className="mb-4 divide-y rounded-xl border">
-        {theory.map((topic, i) => (
-          <li key={topic.id} className="flex items-center gap-3 p-3">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">{i + 1}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{topic.title.ru}</p>
-              <p className="truncate text-xs text-muted-foreground">{topic.title.kk}</p>
-            </div>
-            <label className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="sr-only">{tl({ ru: 'Уроков', kk: 'Сабақ' })}</span>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={topic.lessons}
-                onChange={(e) => {
-                  const n = Math.max(1, Math.min(50, Number(e.target.value) || 1))
-                  setTheory(theory.map((x) => (x.id === topic.id ? { ...x, lessons: n, done: Math.min(x.done, n) } : x)))
-                }}
-                className={cn(inputCls, 'h-8 w-16')}
-              />
-              {tl({ ru: 'ур.', kk: 'сб.' })}
-            </label>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={tl({ ru: 'Удалить', kk: 'Жою' })}
-              onClick={() => setTheory(theory.filter((x) => x.id !== topic.id))}
-            >
-              <Trash2 className="size-4 text-destructive" aria-hidden="true" />
-            </Button>
-          </li>
-        ))}
+    <Card title={tl({ ru: 'Темы и уроки теории', kk: 'Теория тақырыптары мен сабақтары' })}>
+      <ul className="mb-4 flex flex-col gap-2">
+        {theory.map((topic, i) => {
+          const open = expanded === topic.id
+          const content = topic.content ?? []
+          return (
+            <li key={topic.id} className="rounded-xl border">
+              <div className="flex items-center gap-3 p-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{topic.title.ru || '—'}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {content.length} {tl({ ru: 'уроков', kk: 'сабақ' })} • {topic.title.kk || ''}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-expanded={open}
+                  aria-label={tl({ ru: 'Редактировать', kk: 'Өңдеу' })}
+                  onClick={() => setExpanded(open ? null : topic.id)}
+                >
+                  {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={tl({ ru: 'Удалить', kk: 'Жою' })}
+                  onClick={() => setTheory(theory.filter((x) => x.id !== topic.id))}
+                >
+                  <Trash2 className="size-4 text-destructive" aria-hidden="true" />
+                </Button>
+              </div>
+              {open && (
+                <div className="flex flex-col gap-3 border-t bg-muted/20 p-3">
+                  <BiInput
+                    label={tl({ ru: 'Название темы', kk: 'Тақырып атауы' })}
+                    value={topic.title}
+                    onChange={(title) => updateTopic(topic.id, { title })}
+                  />
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground">{tl({ ru: 'Уроки', kk: 'Сабақтар' })}</h4>
+                    {content.map((lesson, li) => (
+                      <LessonEditor
+                        key={lesson.id}
+                        lesson={lesson}
+                        onChange={(updated) =>
+                          updateTopic(topic.id, (t) => {
+                            const next = [...(t.content ?? [])]
+                            next[li] = updated
+                            return { ...t, content: next, lessons: next.length }
+                          })
+                        }
+                        onRemove={() =>
+                          updateTopic(topic.id, (t) => {
+                            const next = (t.content ?? []).filter((_, j) => j !== li)
+                            return { ...t, content: next, lessons: Math.max(1, next.length), done: Math.min(t.done, next.length) }
+                          })
+                        }
+                      />
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      onClick={() =>
+                        updateTopic(topic.id, (t) => {
+                          const next = [
+                            ...(t.content ?? []),
+                            { id: uid(), title: emptyL(), body: emptyL() },
+                          ]
+                          return { ...t, content: next, lessons: next.length }
+                        })
+                      }
+                    >
+                      <Plus className="size-4" aria-hidden="true" />
+                      {tl({ ru: 'Добавить урок', kk: 'Сабақ қосу' })}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </li>
+          )
+        })}
       </ul>
       <form
         className="flex flex-col gap-3 rounded-xl border border-dashed p-3"
         onSubmit={(e) => {
           e.preventDefault()
           if (!title.ru.trim()) return
-          setTheory([...theory, { id: uid(), title: { ru: title.ru.trim(), kk: title.kk.trim() || title.ru.trim() }, lessons, done: 0 }])
+          const newTopic: TheoryTopic = {
+            id: uid(),
+            title: { ru: title.ru.trim(), kk: title.kk.trim() || title.ru.trim() },
+            lessons: 1,
+            done: 0,
+            content: [{ id: uid(), title: emptyL(), body: emptyL() }],
+          }
+          setTheory([...theory, newTopic])
           setTitle(emptyL())
+          setExpanded(newTopic.id)
         }}
       >
         <BiInput label={tl({ ru: 'Новая тема', kk: 'Жаңа тақырып' })} value={title} onChange={setTitle} />
-        <div className="flex items-end gap-2">
-          <Field label={tl({ ru: 'Уроков', kk: 'Сабақ саны' })}>
-            <input type="number" min={1} max={50} value={lessons} onChange={(e) => setLessons(Number(e.target.value) || 1)} className={cn(inputCls, 'w-24')} />
-          </Field>
-          <Button type="submit">
-            <Plus className="size-4" aria-hidden="true" />
-            {tl({ ru: 'Добавить', kk: 'Қосу' })}
-          </Button>
-        </div>
+        <Button type="submit" className="self-start">
+          <Plus className="size-4" aria-hidden="true" />
+          {tl({ ru: 'Добавить тему', kk: 'Тақырып қосу' })}
+        </Button>
       </form>
     </Card>
   )
 }
 
-const emptyQuestion = (): Question => ({ id: '', q: emptyL(), options: [emptyL(), emptyL(), emptyL()], correct: 0, explain: emptyL() })
+const emptyQuestion = (): Question => ({
+  id: '',
+  q: emptyL(),
+  options: [emptyL(), emptyL(), emptyL()],
+  correct: 0,
+  explain: emptyL(),
+  imageUrl: null,
+})
 
 export function QuestionsEditor() {
   const { questions, setQuestions, tl } = useStore()
   const [draft, setDraft] = useState<Question>(emptyQuestion())
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const startEdit = (q: Question) => {
+    setEditingId(q.id)
+    setDraft({ ...q, options: q.options.map((o) => ({ ...o })), imageUrl: q.imageUrl ?? null })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setDraft(emptyQuestion())
+  }
+
+  const saveQuestion = () => {
+    if (!draft.q.ru.trim() || draft.options.some((o) => !o.ru.trim())) return
+    const fill = (v: L) => ({ ru: v.ru.trim(), kk: v.kk.trim() || v.ru.trim() })
+    const payload: Question = {
+      id: editingId || uid(),
+      q: fill(draft.q),
+      options: draft.options.map(fill),
+      correct: draft.correct,
+      explain: fill(draft.explain),
+      imageUrl: draft.imageUrl || null,
+    }
+    if (editingId) {
+      setQuestions(questions.map((x) => (x.id === editingId ? payload : x)))
+    } else {
+      setQuestions([...questions, payload])
+    }
+    cancelEdit()
+  }
+
   return (
-    <Card title={tl({ ru: 'Вопросы тестов', kk: 'Тест сұрақтары' })}>
+    <Card title={tl({ ru: 'Вопросы тестов (в т.ч. дорожные знаки)', kk: 'Тест сұрақтары (жол белгілері)' })}>
       <ul className="mb-4 flex flex-col gap-2">
         {questions.map((q, i) => (
           <li key={q.id} className="rounded-xl border p-3">
             <div className="flex items-start gap-3">
               <span className="text-sm font-bold text-primary">{i + 1}.</span>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{tl(q.q)}</p>
+                {q.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={q.imageUrl} alt="" className="mt-2 max-h-24 rounded-lg border object-contain" />
+                ) : null}
                 <ul className="mt-1 flex flex-wrap gap-1.5">
                   {q.options.map((o, j) => (
                     <li
@@ -204,6 +394,9 @@ export function QuestionsEditor() {
                   ))}
                 </ul>
               </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(q)}>
+                {tl({ ru: 'Изменить', kk: 'Өзгерту' })}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -217,21 +410,55 @@ export function QuestionsEditor() {
           </li>
         ))}
       </ul>
-      <form
-        className="flex flex-col gap-3 rounded-xl border border-dashed p-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (!draft.q.ru.trim() || draft.options.some((o) => !o.ru.trim())) return
-          const fill = (v: L) => ({ ru: v.ru.trim(), kk: v.kk.trim() || v.ru.trim() })
-          setQuestions([
-            ...questions,
-            { id: uid(), q: fill(draft.q), options: draft.options.map(fill), correct: draft.correct, explain: fill(draft.explain) },
-          ])
-          setDraft(emptyQuestion())
-        }}
-      >
-        <h3 className="text-sm font-semibold">{tl({ ru: 'Новый вопрос', kk: 'Жаңа сұрақ' })}</h3>
+      <div className="flex flex-col gap-3 rounded-xl border border-dashed p-3">
+        <h3 className="text-sm font-semibold">
+          {editingId
+            ? tl({ ru: 'Редактирование вопроса', kk: 'Сұрақты өңдеу' })
+            : tl({ ru: 'Новый вопрос', kk: 'Жаңа сұрақ' })}
+        </h3>
         <BiInput label={tl({ ru: 'Вопрос', kk: 'Сұрақ' })} value={draft.q} onChange={(q) => setDraft({ ...draft, q })} />
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {tl({ ru: 'Фото знака / иллюстрация (необязательно)', kk: 'Белгі фотосы / иллюстрация (міндетті емес)' })}
+          </span>
+          {draft.imageUrl ? (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={draft.imageUrl} alt="" className="max-h-40 rounded-lg border object-contain" />
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="absolute right-1 top-1 size-8"
+                onClick={() => setDraft({ ...draft, imageUrl: null })}
+                aria-label={tl({ ru: 'Удалить фото', kk: 'Фотоны жою' })}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ) : (
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-muted/30 text-xs text-muted-foreground hover:bg-muted/50">
+              <ImagePlus className="size-6" aria-hidden="true" />
+              {tl({ ru: 'Загрузить изображение', kk: 'Сурет жүктеу' })}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  try {
+                    const dataUrl = await readFileAsDataUrl(file)
+                    setDraft({ ...draft, imageUrl: dataUrl })
+                  } catch {
+                    /* ignore */
+                  }
+                  e.target.value = ''
+                }}
+              />
+            </label>
+          )}
+        </div>
         {draft.options.map((o, j) => (
           <div key={j} className="flex items-start gap-2">
             <label className="mt-6 flex items-center">
@@ -254,11 +481,20 @@ export function QuestionsEditor() {
           </div>
         ))}
         <BiInput label={tl({ ru: 'Пояснение', kk: 'Түсініктеме' })} value={draft.explain} onChange={(explain) => setDraft({ ...draft, explain })} />
-        <Button type="submit" className="self-start">
-          <Plus className="size-4" aria-hidden="true" />
-          {tl({ ru: 'Добавить вопрос', kk: 'Сұрақ қосу' })}
-        </Button>
-      </form>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={saveQuestion}>
+            <Plus className="size-4" aria-hidden="true" />
+            {editingId
+              ? tl({ ru: 'Сохранить изменения', kk: 'Өзгерістерді сақтау' })
+              : tl({ ru: 'Добавить вопрос', kk: 'Сұрақ қосу' })}
+          </Button>
+          {editingId && (
+            <Button type="button" variant="outline" onClick={cancelEdit}>
+              {tl({ ru: 'Отмена', kk: 'Болдырмау' })}
+            </Button>
+          )}
+        </div>
+      </div>
     </Card>
   )
 }
