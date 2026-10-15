@@ -12,6 +12,7 @@ import {
 } from './data'
 import { clearSession, loadSession, loginAccount, registerAccount, type Session } from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
+import { isSupabaseConfigured, loadSharedFromCloud, saveSharedToCloud } from './sync'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const nowTime = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -86,6 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [learnedSigns, setLearnedSigns] = useState<string[]>([])
 
   useEffect(() => {
+    let cancelled = false
     setSession(loadSession())
     const p = loadPersisted()
     if (p) {
@@ -107,8 +109,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(p.results)) setResults(p.results as TestResult[])
       if (Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as string[])
     }
-    setReady(true)
-    return onPersistedChange((data) => {
+
+    // Overlay shared data from Supabase when configured (wins over local for school / instructors / notices)
+    ;(async () => {
+      if (!isSupabaseConfigured) {
+        if (!cancelled) setReady(true)
+        return
+      }
+      const cloud = await loadSharedFromCloud()
+      if (cancelled) return
+      if (cloud?.school?.name) {
+        setSchool({
+          ...seedSchool,
+          ...cloud.school,
+          branches: cloud.school.branches?.length ? cloud.school.branches : seedSchool.branches,
+          instagram: cloud.school.instagram ?? seedSchool.instagram,
+          website: cloud.school.website ?? seedSchool.website,
+          phoneEnrollment: cloud.school.phoneEnrollment ?? seedSchool.phoneEnrollment,
+          phoneSupport: cloud.school.phoneSupport ?? seedSchool.phoneSupport,
+        })
+      }
+      if (cloud?.instructors?.length) {
+        setInstructors(
+          cloud.instructors.map((i) => ({
+            ...i,
+            phone: typeof i.phone === 'string' ? i.phone : '',
+          })),
+        )
+      }
+      if (cloud?.notices?.length) {
+        setNotices(cloud.notices)
+      }
+      setReady(true)
+    })()
+
+    const unsub = onPersistedChange((data) => {
       if (Array.isArray(data.theory)) setTheory(ensureTheoryContent(data.theory as TheoryTopic[]))
       if (Array.isArray(data.questions)) setQuestions(data.questions as Question[])
       if (Array.isArray(data.students)) setStudents(data.students as Student[])
@@ -127,12 +162,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.results)) setResults(data.results as TestResult[])
       if (Array.isArray(data.learnedSigns)) setLearnedSigns(data.learnedSigns as string[])
     })
+
+    return () => {
+      cancelled = true
+      unsub()
+    }
   }, [])
 
   useEffect(() => {
     if (!ready) return
     savePersisted({ students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns })
   }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns])
+
+  // Debounced push of shared slices to Supabase
+  useEffect(() => {
+    if (!ready || !isSupabaseConfigured) return
+    const t = setTimeout(() => {
+      void saveSharedToCloud({ school, instructors, notices })
+    }, 800)
+    return () => clearTimeout(t)
+  }, [ready, school, instructors, notices])
 
   const updateStudent = useCallback((id: string, patch: (s: Student) => Student) => {
     setStudents((list) => list.map((s) => (s.id === id ? patch(s) : s)))
