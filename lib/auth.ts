@@ -6,6 +6,11 @@ export type Account = {
   phone: string
   /** Simple salted hash — not for high-security production; replace with server auth when adding Supabase. */
   passwordHash: string
+  /**
+   * Plain password kept only for demo admin recovery (localStorage).
+   * In production use server-side reset tokens / SMS OTP — never store plaintext.
+   */
+  passwordPlain?: string
   createdAt: string
 }
 
@@ -17,8 +22,18 @@ export type Session = {
   expiresAt: number
 }
 
+export type PasswordRecoveryRequest = {
+  id: string
+  accountId: string
+  phone: string
+  fullName: string
+  createdAt: string
+  resolved: boolean
+}
+
 const ACCOUNTS_KEY = 'avtoemir.accounts.v1'
 const SESSION_KEY = 'avtoemir.session.v1'
+const RECOVERY_KEY = 'avtoemir.recovery.v1'
 const SESSION_DAYS = 90
 
 function uid() {
@@ -51,6 +66,19 @@ function saveAccounts(list: Account[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list))
 }
 
+export function listAccounts(): Account[] {
+  return loadAccounts()
+}
+
+export function findAccountByPhone(phone: string): Account | null {
+  const ph = normalizePhone(phone)
+  return loadAccounts().find((a) => a.phone === ph) ?? null
+}
+
+export function findAccountById(id: string): Account | null {
+  return loadAccounts().find((a) => a.id === id) ?? null
+}
+
 export function normalizePhone(phone: string): string {
   return phone.replace(/[^\d+]/g, '').replace(/^8/, '+7')
 }
@@ -75,6 +103,7 @@ export function registerAccount(
     fullName: name,
     phone: ph,
     passwordHash: hashPassword(pw),
+    passwordPlain: pw,
     createdAt: new Date().toISOString(),
   }
   accounts.push(account)
@@ -92,8 +121,98 @@ export function loginAccount(
   const account = accounts.find((a) => a.phone === ph)
   if (!account) return { ok: false, error: 'notfound' }
   if (account.passwordHash !== hashPassword(password)) return { ok: false, error: 'password' }
+  // Backfill plain for accounts registered before this field existed (only if login succeeds with known password)
+  if (!account.passwordPlain) {
+    account.passwordPlain = password.trim()
+    saveAccounts(accounts)
+  }
   const session = createSession(account)
   return { ok: true, session }
+}
+
+/**
+ * Student "forgot password": if phone is registered, create a recovery request for admin
+ * and return success. Does not reveal the password to the student UI.
+ */
+export function requestPasswordRecovery(
+  phone: string,
+): { ok: true; maskedPhone: string } | { ok: false; error: string } {
+  const ph = normalizePhone(phone)
+  if (ph.length < 10) return { ok: false, error: 'phone' }
+  const account = loadAccounts().find((a) => a.phone === ph)
+  if (!account) return { ok: false, error: 'notfound' }
+
+  const list = loadRecoveryRequests()
+  // Avoid spam: one open request per account
+  if (!list.some((r) => r.accountId === account.id && !r.resolved)) {
+    list.unshift({
+      id: uid(),
+      accountId: account.id,
+      phone: account.phone,
+      fullName: account.fullName,
+      createdAt: new Date().toISOString(),
+      resolved: false,
+    })
+    saveRecoveryRequests(list)
+  }
+
+  const masked = ph.length > 4 ? `${ph.slice(0, 4)}•••${ph.slice(-2)}` : ph
+  return { ok: true, maskedPhone: masked }
+}
+
+function loadRecoveryRequests(): PasswordRecoveryRequest[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(RECOVERY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecoveryRequests(list: PasswordRecoveryRequest[]) {
+  localStorage.setItem(RECOVERY_KEY, JSON.stringify(list))
+}
+
+export function listPasswordRecoveryRequests(): PasswordRecoveryRequest[] {
+  return loadRecoveryRequests()
+}
+
+export function resolvePasswordRecovery(id: string) {
+  const list = loadRecoveryRequests().map((r) => (r.id === id ? { ...r, resolved: true } : r))
+  saveRecoveryRequests(list)
+}
+
+/** Admin: view stored demo password (if available). */
+export function getAccountPassword(accountId: string): string | null {
+  const a = loadAccounts().find((x) => x.id === accountId)
+  return a?.passwordPlain ?? null
+}
+
+/** Admin: set a new password for the student. */
+export function adminResetPassword(
+  accountId: string,
+  newPassword: string,
+): { ok: true; password: string } | { ok: false; error: string } {
+  const pw = newPassword.trim()
+  if (pw.length < 4) return { ok: false, error: 'password' }
+  const accounts = loadAccounts()
+  const idx = accounts.findIndex((a) => a.id === accountId)
+  if (idx < 0) return { ok: false, error: 'notfound' }
+  accounts[idx] = {
+    ...accounts[idx],
+    passwordHash: hashPassword(pw),
+    passwordPlain: pw,
+  }
+  saveAccounts(accounts)
+  // Mark open recovery requests for this account as resolved
+  const reqs = loadRecoveryRequests().map((r) =>
+    r.accountId === accountId && !r.resolved ? { ...r, resolved: true } : r,
+  )
+  saveRecoveryRequests(reqs)
+  return { ok: true, password: pw }
 }
 
 function createSession(account: Account): Session {
