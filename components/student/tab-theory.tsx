@@ -6,13 +6,100 @@ import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
 import { RoadSignGraphic } from './road-sign'
 import { useStore } from '@/lib/store'
-import { roadSigns } from '@/lib/data'
+import { roadSigns, type TheoryTopic } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
-function Curriculum() {
+function TheoryDetail({
+  topic,
+  onBack,
+}: {
+  topic: TheoryTopic
+  onBack: () => void
+}) {
   const { theory, setTheory, t, tl } = useStore()
-  const total = theory.reduce((a, b) => a + b.lessons, 0)
+  const lessons = topic.content ?? []
+  const [lessonIdx, setLessonIdx] = useState(0)
+  const lesson = lessons[lessonIdx]
+
+  const markDone = () => {
+    setTheory(
+      theory.map((x) =>
+        x.id === topic.id ? { ...x, done: Math.min(x.lessons, Math.max(x.done, lessonIdx + 1)) } : x,
+      ),
+    )
+  }
+
+  if (lessons.length === 0) {
+    return (
+      <Section>
+        <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={onBack}>
+          <ChevronLeft className="size-4" aria-hidden="true" />
+          {t('curriculum')}
+        </Button>
+        <h2 className="mb-2 text-lg font-bold">{tl(topic.title)}</h2>
+        <p className="text-sm text-muted-foreground">
+          {tl({
+            ru: 'Подробный текст уроков пока не добавлен. Администратор может заполнить его в панели управления.',
+            kk: 'Сабақтардың толық мәтіні әзірге қосылмаған. Әкімші оны басқару панелінде толтыра алады.',
+          })}
+        </p>
+      </Section>
+    )
+  }
+
+  return (
+    <Section>
+      <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={onBack}>
+        <ChevronLeft className="size-4" aria-hidden="true" />
+        {t('curriculum')}
+      </Button>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{tl(topic.title)}</p>
+      <h2 className="mb-1 text-lg font-bold leading-snug">{tl(lesson.title)}</h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        {tl({ ru: 'Урок', kk: 'Сабақ' })} {lessonIdx + 1} {t('of')} {lessons.length}
+      </p>
+      <div className="mb-6 whitespace-pre-wrap text-sm leading-relaxed text-pretty">{tl(lesson.body)}</div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={lessonIdx === 0}
+          onClick={() => setLessonIdx((i) => i - 1)}
+          aria-label={tl({ ru: 'Предыдущий урок', kk: 'Алдыңғы сабақ' })}
+        >
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </Button>
+        <Button className="flex-1" onClick={markDone}>
+          <CheckCircle2 className="size-4" aria-hidden="true" />
+          {t('completeLesson')}
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={lessonIdx >= lessons.length - 1}
+          onClick={() => {
+            markDone()
+            setLessonIdx((i) => i + 1)
+          }}
+          aria-label={tl({ ru: 'Следующий урок', kk: 'Келесі сабақ' })}
+        >
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+    </Section>
+  )
+}
+
+function Curriculum() {
+  const { theory, t, tl } = useStore()
+  const [openId, setOpenId] = useState<string | null>(null)
+  const total = theory.reduce((a, b) => a + b.lessons, 0) || 1
   const done = theory.reduce((a, b) => a + b.done, 0)
+  const openTopic = theory.find((x) => x.id === openId)
+
+  if (openTopic) {
+    return <TheoryDetail topic={openTopic} onBack={() => setOpenId(null)} />
+  }
 
   return (
     <Section title={t('curriculum')} action={<span className="text-sm font-semibold text-primary">{Math.round((done / total) * 100)}%</span>}>
@@ -33,24 +120,20 @@ function Curriculum() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug">{tl(topic.title)}</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <ProgressBar value={(topic.done / topic.lessons) * 100} className="h-1.5" label={tl(topic.title)} />
+                  <ProgressBar value={(topic.done / Math.max(1, topic.lessons)) * 100} className="h-1.5" label={tl(topic.title)} />
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                     {topic.done}/{topic.lessons}
                   </span>
                 </div>
               </div>
-              {!complete && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  aria-label={`${t('completeLesson')}: ${tl(topic.title)}`}
-                  onClick={() =>
-                    setTheory(theory.map((x) => (x.id === topic.id ? { ...x, done: Math.min(x.lessons, x.done + 1) } : x)))
-                  }
-                >
-                  <BookOpen className="size-4" aria-hidden="true" />
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label={`${t('continueLesson')}: ${tl(topic.title)}`}
+                onClick={() => setOpenId(topic.id)}
+              >
+                <BookOpen className="size-4" aria-hidden="true" />
+              </Button>
             </li>
           )
         })}
