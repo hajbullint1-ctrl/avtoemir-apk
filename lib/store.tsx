@@ -89,7 +89,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const p = loadPersisted()
     if (p) {
       if (Array.isArray(p.students)) setStudents(p.students as Student[])
-      if (p.school) setSchool({ ...seedSchool, ...(p.school as School), branches: (p.school as School).branches?.length ? (p.school as School).branches : seedSchool.branches, instagram: (p.school as School).instagram ?? seedSchool.instagram, website: (p.school as School).website ?? seedSchool.website })
+      if (p.school) setSchool({ ...seedSchool, ...(p.school as School), branches: (p.school as School).branches?.length ? (p.school as School).branches : seedSchool.branches, instagram: (p.school as School).instagram ?? seedSchool.instagram, website: (p.school as School).website ?? seedSchool.website, phoneEnrollment: (p.school as School).phoneEnrollment ?? seedSchool.phoneEnrollment, phoneSupport: (p.school as School).phoneSupport ?? seedSchool.phoneSupport })
       if (Array.isArray(p.theory)) setTheory(ensureTheoryContent(p.theory as TheoryTopic[]))
       if (Array.isArray(p.questions)) setQuestions(p.questions as Question[])
       if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
