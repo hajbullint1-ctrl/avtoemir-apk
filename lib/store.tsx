@@ -161,6 +161,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.bookings) setBookings(cloud.bookings)
       if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts)
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
+      if (cloud?.results) setResults(cloud.results)
+      if (cloud?.learnedSigns) setLearnedSigns(cloud.learnedSigns)
       // Push local accounts up if cloud was empty (first device bootstrap)
       const localAccounts = listAccounts()
       if (localAccounts.length && (!cloud?.accounts || cloud.accounts.length === 0)) {
@@ -246,10 +248,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         bookings,
         accounts: listAccounts(),
         recovery: listPasswordRecoveryRequests(),
+        results,
+        learnedSigns,
       })
     }, 800)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns])
+
+  // Periodic pull from cloud so admin changes appear on student devices
+  useEffect(() => {
+    if (!ready || !isSupabaseConfigured) return
+    const pull = async () => {
+      const cloud = await loadSharedFromCloud()
+      if (!cloud) return
+      if (cloud.notices) setNotices(cloud.notices)
+      if (cloud.messages) setMessages(cloud.messages)
+      if (cloud.instructors?.length) {
+        setInstructors(cloud.instructors.map((i) => ({ ...i, phone: typeof i.phone === 'string' ? i.phone : '' })))
+      }
+      if (cloud.school?.name) {
+        setSchool((prev) => ({ ...prev, ...cloud.school! }))
+      }
+      if (cloud.students?.length) setStudents(cloud.students)
+      if (cloud.accounts?.length) mergeAccountsFromCloud(cloud.accounts)
+      if (cloud.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
+      if (cloud.bookings) setBookings(cloud.bookings)
+      if (cloud.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
+      if (cloud.questions?.length) setQuestions(cloud.questions)
+      if (cloud.reviews) setReviews(cloud.reviews)
+    }
+    const id = setInterval(pull, 15000)
+    return () => clearInterval(id)
+  }, [ready])
 
   const updateStudent = useCallback((id: string, patch: (s: Student) => Student) => {
     setStudents((list) => list.map((s) => (s.id === id ? patch(s) : s)))

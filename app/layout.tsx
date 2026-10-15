@@ -10,7 +10,14 @@ export const metadata: Metadata = {
   title: 'AvtoEmir — автошкола в Туркестане и Карнаке',
   description:
     'AvtoEmir: запись в автошколу (категории B, B1, C, C1), теория ПДД, тесты, запись на вождение, чат с инструктором. Қазақша / Русский.',
- manifest: '/manifest.json',
+  manifest: '/manifest.json',
+  applicationName: 'AvtoEmir',
+  appleWebApp: {
+    capable: true,
+    title: 'AvtoEmir',
+    statusBarStyle: 'default',
+  },
+  formatDetection: { telephone: true },
   generator: 'v0.app',
   icons: {
     icon: [
@@ -20,6 +27,9 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 }
 
 export const viewport: Viewport = {
@@ -27,6 +37,9 @@ export const viewport: Viewport = {
   themeColor: '#1d4fd8',
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

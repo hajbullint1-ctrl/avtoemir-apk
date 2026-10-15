@@ -287,6 +287,35 @@ export function adminResetPassword(
   return { ok: true, password: pw }
 }
 
+/**
+ * Self-service reset: student sets a new password using registered phone (demo).
+ * Also resolves open recovery requests for that account.
+ */
+export function resetPasswordByPhone(
+  phone: string,
+  newPassword: string,
+): { ok: true } | { ok: false; error: string } {
+  const ph = normalizePhone(phone)
+  const pw = newPassword.trim()
+  if (ph.length < 10) return { ok: false, error: 'phone' }
+  if (pw.length < 4) return { ok: false, error: 'password' }
+  const accounts = loadAccounts()
+  const idx = accounts.findIndex((a) => a.phone === ph)
+  if (idx < 0) return { ok: false, error: 'notfound' }
+  const accountId = accounts[idx].id
+  accounts[idx] = {
+    ...accounts[idx],
+    passwordHash: hashPassword(pw),
+    passwordPlain: pw,
+  }
+  saveAccounts(accounts)
+  const reqs = loadRecoveryRequests().map((r) =>
+    r.accountId === accountId && !r.resolved ? { ...r, resolved: true } : r,
+  )
+  saveRecoveryRequests(reqs)
+  return { ok: true }
+}
+
 function createSession(account: Account): Session {
   const session: Session = {
     accountId: account.id,

@@ -13,6 +13,7 @@ import type {
   Review,
   School,
   Student,
+  TestResult,
   TheoryTopic,
 } from './data'
 import type { Account, PasswordRecoveryRequest } from './auth'
@@ -29,6 +30,8 @@ export type SharedSlice = {
   bookings?: Booking[]
   accounts?: Account[]
   recovery?: PasswordRecoveryRequest[]
+  results?: TestResult[]
+  learnedSigns?: string[]
 }
 
 const KEYS = [
@@ -43,6 +46,8 @@ const KEYS = [
   'bookings',
   'accounts',
   'recovery',
+  'results',
+  'learnedSigns',
 ] as const
 
 export type SharedKey = (typeof KEYS)[number]
@@ -106,6 +111,12 @@ export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
         case 'recovery':
           if (Array.isArray(d)) out.recovery = d as PasswordRecoveryRequest[]
           break
+        case 'results':
+          if (Array.isArray(d)) out.results = d as TestResult[]
+          break
+        case 'learnedSigns':
+          if (Array.isArray(d)) out.learnedSigns = d as string[]
+          break
       }
     }
     return out
@@ -151,6 +162,8 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.bookings) tasks.push(saveSharedKey('bookings', slice.bookings))
   if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
   if (slice.recovery) tasks.push(saveSharedKey('recovery', slice.recovery))
+  if (slice.results) tasks.push(saveSharedKey('results', slice.results))
+  if (slice.learnedSigns) tasks.push(saveSharedKey('learnedSigns', slice.learnedSigns))
   await Promise.all(tasks)
 }
 

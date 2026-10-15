@@ -5,7 +5,7 @@ import { Car, Eye, EyeOff, KeyRound, LogIn, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
-import { requestPasswordRecovery } from '@/lib/auth'
+import { resetPasswordByPhone } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 type Mode = 'login' | 'register' | 'forgot'
@@ -16,6 +16,7 @@ export function AuthScreen() {
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [password2, setPassword2] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -26,6 +27,7 @@ export function AuthScreen() {
       name: { ru: 'Укажите имя и фамилию', kk: 'Аты-жөніңізді енгізіңіз' },
       phone: { ru: 'Укажите корректный номер телефона', kk: 'Дұрыс телефон нөмірін енгізіңіз' },
       password: { ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' },
+      mismatch: { ru: 'Пароли не совпадают', kk: 'Құпия сөздер сәйкес емес' },
       exists: { ru: 'Этот номер уже зарегистрирован. Войдите или восстановите пароль.', kk: 'Бұл нөмір тіркелген. Кіріңіз немесе құпия сөзді қалпына келтіріңіз.' },
       notfound: { ru: 'Аккаунт с таким номером не найден', kk: 'Мұндай нөмірмен аккаунт табылмады' },
       wrong: { ru: 'Неверный пароль', kk: 'Құпия сөз қате' },
@@ -38,6 +40,8 @@ export function AuthScreen() {
     setMode(m)
     setError(null)
     setSuccess(null)
+    setPassword('')
+    setPassword2('')
   }
 
   const onSubmit = (e: React.FormEvent) => {
@@ -50,17 +54,25 @@ export function AuthScreen() {
         const res = register(fullName, phone, password)
         if (!res.ok) setError(errorText(res.error === 'password' ? 'password' : res.error))
       } else if (mode === 'forgot') {
-        const res = requestPasswordRecovery(phone)
-        if (!res.ok) {
-          setError(errorText(res.error))
-        } else {
-          setSuccess(
-            tl({
-              ru: `Заявка на восстановление принята для ${res.maskedPhone}. Администратор свяжется с вами и подскажет пароль. Также можно обратиться в филиал автошколы.`,
-              kk: `${res.maskedPhone} нөмірі үшін қалпына келтіру өтініші қабылданды. Әкімші сізбен байланысып, құпия сөзді хабарлайды. Сондай-ақ филиалға жүгінуге болады.`,
-            }),
-          )
+        if (password !== password2) {
+          setError(errorText('mismatch'))
+          return
         }
+        // Self-service: set new password by phone; also leave a recovery note for admin
+        const reset = resetPasswordByPhone(phone, password)
+        if (!reset.ok) {
+          setError(errorText(reset.error))
+          return
+        }
+        setSuccess(
+          tl({
+            ru: 'Пароль обновлён. Теперь войдите с новым паролем.',
+            kk: 'Құпия сөз жаңартылды. Енді жаңа құпия сөзбен кіріңіз.',
+          }),
+        )
+        setPassword('')
+        setPassword2('')
+        setTimeout(() => switchMode('login'), 1500)
       } else {
         const res = login(phone, password)
         if (!res.ok) setError(errorText(res.error === 'password' ? 'wrong' : res.error))
@@ -99,8 +111,8 @@ export function AuthScreen() {
                 tl({ ru: 'Создайте аккаунт: имя, телефон и пароль', kk: 'Аккаунт жасаңыз: аты, телефон және құпия сөз' })}
               {mode === 'forgot' &&
                 tl({
-                  ru: 'Укажите номер телефона — заявка уйдёт администратору',
-                  kk: 'Телефон нөмірін енгізіңіз — өтініш әкімшіге жіберіледі',
+                  ru: 'Введите номер телефона и новый пароль — пароль сменится сразу',
+                  kk: 'Телефон нөмірі мен жаңа құпия сөзді енгізіңіз — құпия сөз бірден өзгереді',
                 })}
             </p>
           </div>
@@ -134,10 +146,12 @@ export function AuthScreen() {
                 className="h-11 rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
               />
             </label>
-            {mode !== 'forgot' && (
+            {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-muted-foreground">
-                  {tl({ ru: 'Пароль', kk: 'Құпия сөз' })}
+                  {mode === 'forgot'
+                    ? tl({ ru: 'Новый пароль', kk: 'Жаңа құпия сөз' })
+                    : tl({ ru: 'Пароль', kk: 'Құпия сөз' })}
                 </span>
                 <div className="relative">
                   <input
@@ -158,6 +172,22 @@ export function AuthScreen() {
                     {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
+              </label>
+            )}
+            {mode === 'forgot' && (
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {tl({ ru: 'Повторите новый пароль', kk: 'Жаңа құпия сөзді қайталаңыз' })}
+                </span>
+                <input
+                  required
+                  type={showPw ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={password2}
+                  onChange={(e) => setPassword2(e.target.value)}
+                  minLength={4}
+                  className="h-11 w-full rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
+                />
               </label>
             )}
             {mode === 'login' && (
@@ -197,7 +227,7 @@ export function AuthScreen() {
               {mode === 'forgot' && (
                 <>
                   <KeyRound className="size-4" aria-hidden="true" />
-                  {tl({ ru: 'Отправить заявку', kk: 'Өтініш жіберу' })}
+                  {tl({ ru: 'Сохранить новый пароль', kk: 'Жаңа құпия сөзді сақтау' })}
                 </>
               )}
             </Button>

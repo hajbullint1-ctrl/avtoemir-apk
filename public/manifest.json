@@ -1,25 +1,36 @@
 {
-  "background_color": "#ffffff",
-  "description": "AvtoEmir: запись в автошколу (категории B, B1, C, C1), теория ПДД, тесты, запись на вождение, чат с инструктором. Қазақша / Русский.",
-  "dir": "ltr",
-  "display": "standalone",
+  "id": "com.avtoemir.app",
   "name": "AvtoEmir",
-  "orientation": "any",
-  "scope": "/",
   "short_name": "AvtoEmir",
+  "description": "AvtoEmir: автошкола — теория, тесты, запись на вождение. Қазақша / Русский.",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
   "theme_color": "#1d4fd8",
+  "categories": ["education", "lifestyle"],
   "icons": [
     {
       "src": "/icon-192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
-  ],
-  "id": "com.avtoemir.app"
+  ]
 }
