@@ -323,7 +323,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(() => {
     const meId = session?.accountId ?? 'me'
-    const me = students.find((s) => s.id === meId) || students.find((s) => s.phone === session?.phone) || students[0] || seedStudents[0]
+    const phoneNorm = (p: string) => p.replace(/[^\d+]/g, '').replace(/^8/, '+7')
+    const byId = students.find((s) => s.id === meId)
+    const byPhone = session?.phone
+      ? students.find((s) => phoneNorm(s.phone) === phoneNorm(session.phone))
+      : undefined
+    // Prefer logged-in account; never show another student's card as "me"
+    let me: Student =
+      byId ||
+      byPhone ||
+      (session
+        ? {
+            id: session.accountId,
+            name: session.fullName,
+            phone: session.phone,
+            category: 'B' as const,
+            docs: { idFront: null, idBack: null, psycho: null, narco: null },
+            status: 'draft' as const,
+            readyDate: null,
+            submittedAt: null,
+          }
+        : students[0] || seedStudents[0])
+    if (session && (byId || byPhone) && me.name !== session.fullName) {
+      me = { ...me, name: session.fullName }
+    }
     return {
       ready, session, login, register, logout, lang, setLang,
       t: (k) => dict[lang][k] ?? k, tl: (v) => v[lang] || v.ru, students, me,

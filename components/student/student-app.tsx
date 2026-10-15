@@ -50,7 +50,7 @@ export function StudentApp() {
             </span>
             <div className="leading-tight">
               <p className="text-base font-extrabold tracking-tight">AvtoEmir</p>
-              <p className="max-w-[160px] truncate text-[11px] opacity-80">{session.fullName || t('appTagline')}</p>
+              <p className="max-w-[160px] truncate text-[11px] opacity-80">{t('appTagline')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

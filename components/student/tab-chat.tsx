@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, CalendarClock, FileCheck2, Info, SendHorizontal, ShieldCheck } from 'lucide-react'
+import { Bell, CalendarClock, FileCheck2, Info, Megaphone, SendHorizontal, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
@@ -20,7 +20,12 @@ function Chat() {
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const current = messages.filter((m) => m.thread === thread)
-  const active = threads.find((x) => x.id === thread)!
+  const active = threads.find((x) => x.id === thread) ?? threads[0]
+
+  useEffect(() => {
+    // If selected instructor was removed, fall back to admin
+    if (!threads.some((th) => th.id === thread)) setThread('admin')
+  }, [threads, thread])
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
@@ -64,9 +69,9 @@ function Chat() {
       <div className="rounded-xl border bg-muted/40">
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <span className="size-2 rounded-full bg-success" aria-hidden="true" />
-          <span className="text-sm font-semibold">{active.name}</span>
+          <span className="text-sm font-semibold">{active?.name ?? t('administration')}</span>
           <span className="text-xs text-muted-foreground">
-            • {active.sub} • {t('online')}
+            • {active?.sub ?? 'AvtoEmir'} • {t('online')}
           </span>
         </div>
         <div ref={listRef} className="flex h-64 flex-col gap-2 overflow-y-auto p-3" aria-live="polite">
@@ -116,7 +121,12 @@ function Chat() {
 
 function Notifications() {
   const { t, tl, notices, markNoticesRead } = useStore()
-  const icons = { lesson: CalendarClock, docs: FileCheck2, info: Info }
+  const icons: Record<string, typeof Bell> = {
+    lesson: CalendarClock,
+    docs: FileCheck2,
+    info: Info,
+    announce: Megaphone,
+  }
   const unread = notices.filter((n) => !n.read).length
   return (
     <Section
@@ -130,17 +140,17 @@ function Notifications() {
         </span>
       }
       action={
-        unread > 0 && (
+        unread > 0 ? (
           <button type="button" onClick={markNoticesRead} className="text-xs font-medium text-primary hover:underline">
             ✓✓
             <span className="sr-only">Прочитано</span>
           </button>
-        )
+        ) : undefined
       }
     >
       <ul className="flex flex-col gap-2">
         {notices.map((n) => {
-          const Icon = icons[n.kind]
+          const Icon = icons[n.kind] ?? Bell
           return (
             <li key={n.id} className={cn('flex gap-3 rounded-xl border p-3', !n.read && 'border-primary/40 bg-accent/60')}>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-primary shadow-xs">
