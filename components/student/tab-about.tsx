@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Clock, ExternalLink, MapPin, MessageSquarePlus, Phone, X } from 'lucide-react'
+import { Clock, ExternalLink, Globe, Instagram, MapPin, MessageSquarePlus, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, Stars } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
@@ -115,15 +115,17 @@ export function TabAbout() {
                   <p className="text-sm text-muted-foreground">{tl(b.address)}</p>
                 </div>
               </div>
-              <a
-                href={b.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 flex h-10 items-center justify-center gap-2 rounded-lg bg-[#19aa1e] text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                {t('open2gis')}
-                <ExternalLink className="size-4" aria-hidden="true" />
-              </a>
+              {b.link ? (
+                <a
+                  href={b.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex h-10 items-center justify-center gap-2 rounded-lg bg-[#19aa1e] text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  {t('open2gis')}
+                  <ExternalLink className="size-4" aria-hidden="true" />
+                </a>
+              ) : null}
             </div>
           ))}
         </div>
@@ -151,6 +153,34 @@ export function TabAbout() {
               <span className="text-xs font-medium text-primary">{t('call')}</span>
             </a>
           ))}
+          {school.instagram ? (
+            <a
+              href={school.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex items-center gap-2">
+                <Instagram className="size-4 text-primary" aria-hidden="true" />
+                Instagram
+              </span>
+              <ExternalLink className="size-4 text-muted-foreground" aria-hidden="true" />
+            </a>
+          ) : null}
+          {school.website ? (
+            <a
+              href={school.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex items-center gap-2">
+                <Globe className="size-4 text-primary" aria-hidden="true" />
+                {tl({ ru: 'Официальный сайт', kk: 'Ресми сайт' })}
+              </span>
+              <ExternalLink className="size-4 text-muted-foreground" aria-hidden="true" />
+            </a>
+          ) : null}
         </div>
       </Section>
 
