@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { CheckCircle2, Clock, FileText, IdCard, ImagePlus, ShieldAlert, Upload, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, FileText, Headphones, IdCard, ImagePlus, Phone, ShieldAlert, Upload, UserPlus, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
 import { Countdown } from './countdown'
@@ -110,7 +110,7 @@ function StatusCard() {
 }
 
 export function TabHome() {
-  const { me, setCategory, submitDocs, t, theory, results, bookings } = useStore()
+  const { me, setCategory, submitDocs, t, tl, theory, results, bookings, school } = useStore()
   const allUploaded = Object.values(me.docs).every(Boolean)
   const canEdit = me.status === 'draft' || me.status === 'rejected'
   const totalLessons = theory.reduce((a, b) => a + b.lessons, 0)
@@ -204,6 +204,55 @@ export function TabHome() {
             </Button>
           </>
         )}
+      </Section>
+
+      <Section title={t('contacts')}>
+        <div className="flex flex-col gap-2">
+          {school.phoneEnrollment ? (
+            <a
+              href={`tel:${school.phoneEnrollment.replace(/[^\d+]/g, '')}`}
+              className="flex items-center justify-between rounded-xl border border-primary/30 bg-accent/40 p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex min-w-0 items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <UserPlus className="size-4" aria-hidden="true" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {tl({ ru: 'Запись в автошколу', kk: 'Автомектепке жазылу' })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                    {school.phoneEnrollment}
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-medium text-primary">{t('call')}</span>
+            </a>
+          ) : null}
+          {school.phoneSupport ? (
+            <a
+              href={`tel:${school.phoneSupport.replace(/[^\d+]/g, '')}`}
+              className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
+            >
+              <span className="flex min-w-0 items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+                  <Headphones className="size-4" aria-hidden="true" />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {tl({ ru: 'Служба поддержки приложения', kk: 'Қолданба қолдау қызметі' })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                    {school.phoneSupport}
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-medium text-primary">{t('call')}</span>
+            </a>
+          ) : null}
+        </div>
       </Section>
     </div>
   )
