@@ -323,46 +323,133 @@ export function QuestionsEditor() {
 export function InstructorsEditor() {
   const { instructors, setInstructors, tl } = useStore()
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [car, setCar] = useState('')
-  const update = (id: string, patch: Partial<(typeof instructors)[number]>) => setInstructors(instructors.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  const update = (id: string, patch: Partial<(typeof instructors)[number]>) =>
+    setInstructors(instructors.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+
   return (
     <Card title={tl({ ru: 'Инструкторы и расписание', kk: 'Нұсқаушылар және кесте' })}>
       <div className="mb-4 flex flex-col gap-3">
         {instructors.map((ins) => (
           <div key={ins.id} className="flex flex-col gap-3 rounded-xl border p-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              <Field label={tl({ ru: 'ФИО', kk: 'Аты-жөні' })}><input value={ins.name} onChange={(e) => update(ins.id, { name: e.target.value })} className={inputCls} /></Field>
-              <Field label={tl({ ru: 'Автомобиль', kk: 'Автокөлік' })}><input value={ins.car} onChange={(e) => update(ins.id, { car: e.target.value })} className={inputCls} /></Field>
+              <Field label={tl({ ru: 'ФИО', kk: 'Аты-жөні' })}>
+                <input value={ins.name} onChange={(e) => update(ins.id, { name: e.target.value })} className={inputCls} />
+              </Field>
+              <Field label={tl({ ru: 'Телефон', kk: 'Телефон' })}>
+                <input
+                  type="tel"
+                  value={ins.phone ?? ''}
+                  onChange={(e) => update(ins.id, { phone: e.target.value })}
+                  className={inputCls}
+                  placeholder="+7 ..."
+                />
+              </Field>
+              <Field label={tl({ ru: 'Автомобиль', kk: 'Автокөлік' })}>
+                <input value={ins.car} onChange={(e) => update(ins.id, { car: e.target.value })} className={inputCls} />
+              </Field>
             </div>
             <Field label={tl({ ru: 'Время занятий (через запятую)', kk: 'Сабақ уақыты (үтір арқылы)' })}>
-              <input defaultValue={ins.slots.join(', ')} onBlur={(e) => update(ins.id, { slots: e.target.value.split(',').map((s) => s.trim()).filter((s) => /^\d{1,2}:\d{2}$/.test(s)) })} className={inputCls} />
+              <input
+                defaultValue={ins.slots.join(', ')}
+                onBlur={(e) =>
+                  update(ins.id, {
+                    slots: e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter((s) => /^\d{1,2}:\d{2}$/.test(s)),
+                  })
+                }
+                className={inputCls}
+              />
             </Field>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-1.5" role="group">
                 {CATEGORIES.map((c) => {
                   const on = ins.categories.includes(c)
                   return (
-                    <button key={c} type="button" aria-pressed={on} onClick={() => update(ins.id, { categories: on ? ins.categories.filter((x) => x !== c) : ([...ins.categories, c] as Category[]) })} className={cn('rounded-lg border px-3 py-1 text-xs font-bold', on ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground')}>{c}</button>
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        update(ins.id, {
+                          categories: on
+                            ? ins.categories.filter((x) => x !== c)
+                            : ([...ins.categories, c] as Category[]),
+                        })
+                      }
+                      className={cn(
+                        'rounded-lg border px-3 py-1 text-xs font-bold',
+                        on ? 'border-primary bg-primary text-primary-foreground' : 'text-muted-foreground',
+                      )}
+                    >
+                      {c}
+                    </button>
                   )
                 })}
               </div>
-              <Button variant="ghost" size="sm" className="text-destructive" disabled={instructors.length <= 1} onClick={() => setInstructors(instructors.filter((x) => x.id !== ins.id))}>
-                <Trash2 className="size-4" aria-hidden="true" />{tl({ ru: 'Удалить', kk: 'Жою' })}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                disabled={instructors.length <= 1}
+                onClick={() => setInstructors(instructors.filter((x) => x.id !== ins.id))}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                {tl({ ru: 'Удалить', kk: 'Жою' })}
               </Button>
             </div>
           </div>
         ))}
       </div>
-      <form className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed p-3" onSubmit={(e) => {
-        e.preventDefault()
-        if (!name.trim()) return
-        setInstructors([...instructors, { id: uid(), name: name.trim(), car: car.trim() || '—', categories: ['B'], slots: ['09:00', '11:00', '14:00', '16:00'] }])
-        setName('')
-        setCar('')
-      }}>
-        <div className="min-w-40 flex-1"><Field label={tl({ ru: 'ФИО', kk: 'Аты-жөні' })}><input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Field></div>
-        <div className="min-w-40 flex-1"><Field label={tl({ ru: 'Автомобиль', kk: 'Автокөлік' })}><input value={car} onChange={(e) => setCar(e.target.value)} className={inputCls} /></Field></div>
-        <Button type="submit"><Plus className="size-4" aria-hidden="true" />{tl({ ru: 'Добавить', kk: 'Қосу' })}</Button>
+      <form
+        className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed p-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!name.trim()) return
+          setInstructors([
+            ...instructors,
+            {
+              id: uid(),
+              name: name.trim(),
+              phone: phone.trim(),
+              car: car.trim() || '—',
+              categories: ['B'],
+              slots: ['09:00', '11:00', '14:00', '16:00'],
+            },
+          ])
+          setName('')
+          setPhone('')
+          setCar('')
+        }}
+      >
+        <div className="min-w-36 flex-1">
+          <Field label={tl({ ru: 'ФИО', kk: 'Аты-жөні' })}>
+            <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+        <div className="min-w-36 flex-1">
+          <Field label={tl({ ru: 'Телефон', kk: 'Телефон' })}>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={inputCls}
+              placeholder="+7 ..."
+            />
+          </Field>
+        </div>
+        <div className="min-w-36 flex-1">
+          <Field label={tl({ ru: 'Автомобиль', kk: 'Автокөлік' })}>
+            <input value={car} onChange={(e) => setCar(e.target.value)} className={inputCls} />
+          </Field>
+        </div>
+        <Button type="submit">
+          <Plus className="size-4" aria-hidden="true" />
+          {tl({ ru: 'Добавить', kk: 'Қосу' })}
+        </Button>
       </form>
     </Card>
   )

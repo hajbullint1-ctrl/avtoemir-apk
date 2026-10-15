@@ -93,7 +93,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (p.school) setSchool({ ...seedSchool, ...(p.school as School), branches: (p.school as School).branches?.length ? (p.school as School).branches : seedSchool.branches, instagram: (p.school as School).instagram ?? seedSchool.instagram, website: (p.school as School).website ?? seedSchool.website, phoneEnrollment: (p.school as School).phoneEnrollment ?? seedSchool.phoneEnrollment, phoneSupport: (p.school as School).phoneSupport ?? seedSchool.phoneSupport })
       if (Array.isArray(p.theory)) setTheory(ensureTheoryContent(p.theory as TheoryTopic[]))
       if (Array.isArray(p.questions)) setQuestions(p.questions as Question[])
-      if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
+      if (Array.isArray(p.instructors))
+        setInstructors(
+          (p.instructors as Instructor[]).map((i) => ({
+            ...i,
+            phone: typeof i.phone === 'string' ? i.phone : '',
+          })),
+        )
       if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
       if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
       if (Array.isArray(p.notices)) setNotices(p.notices as Notice[])
@@ -107,7 +113,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.questions)) setQuestions(data.questions as Question[])
       if (Array.isArray(data.students)) setStudents(data.students as Student[])
       if (data.school) setSchool(data.school as School)
-      if (Array.isArray(data.instructors)) setInstructors(data.instructors as Instructor[])
+      if (Array.isArray(data.instructors))
+        setInstructors(
+          (data.instructors as Instructor[]).map((i) => ({
+            ...i,
+            phone: typeof i.phone === 'string' ? i.phone : '',
+          })),
+        )
       if (Array.isArray(data.reviews)) setReviews(data.reviews as Review[])
       if (Array.isArray(data.messages)) setMessages(data.messages as Message[])
       if (Array.isArray(data.notices)) setNotices(data.notices as Notice[])

@@ -37,7 +37,7 @@ export type School = {
 export type TheoryLesson = { id: string; title: L; body: L }
 export type TheoryTopic = { id: string; title: L; lessons: number; done: number; content?: TheoryLesson[] }
 export type Question = { id: string; q: L; options: L[]; correct: number; explain: L; imageUrl?: string | null }
-export type Instructor = { id: string; name: string; car: string; categories: Category[]; slots: string[] }
+export type Instructor = { id: string; name: string; phone: string; car: string; categories: Category[]; slots: string[] }
 export type Review = { id: string; author: string; rating: number; text: string; date: string; visible: boolean }
 export type Message = { id: string; thread: string; fromMe: boolean; text: string; time: string }
 export type Notice = { id: string; kind: 'lesson' | 'docs' | 'info' | 'announce'; title: L; body: L; time: string; read: boolean }
@@ -165,7 +165,30 @@ export const seedQuestions: Question[] = [
 ]
 
 export const seedInstructors: Instructor[] = [
-  { id: 'i1', name: 'Бауыржан Ахметов', car: 'Chevrolet Cobalt • МКПП', categories: ['B', 'B1'], slots: ['09:00', '10:30', '12:00', '14:00', '15:30', '17:00'] },
+  {
+    id: 'i1',
+    name: 'Бауыржан Ахметов',
+    phone: '+7 701 234 56 78',
+    car: 'Chevrolet Cobalt • МКПП',
+    categories: ['B', 'B1'],
+    slots: ['09:00', '10:30', '12:00', '14:00', '15:30', '17:00'],
+  },
+  {
+    id: 'i2',
+    name: 'Самат Оразбаев',
+    phone: '+7 702 345 67 89',
+    car: 'Hyundai Accent • АКПП',
+    categories: ['B'],
+    slots: ['09:00', '11:00', '13:00', '15:00', '17:00'],
+  },
+  {
+    id: 'i3',
+    name: 'Канат Жунусов',
+    phone: '+7 705 456 78 90',
+    car: 'ГАЗель Next • C/C1',
+    categories: ['C', 'C1'],
+    slots: ['10:00', '12:00', '14:00', '16:00'],
+  },
 ]
 
 export const seedReviews: Review[] = [

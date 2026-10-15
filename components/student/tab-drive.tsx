@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarCheck, Car, MapPin, Route, Trash2 } from 'lucide-react'
+import { CalendarCheck, Car, MapPin, Phone, Route, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
 import { HillDiagram, ParallelDiagram, SlalomDiagram } from './maneuver-diagrams'
@@ -87,6 +87,16 @@ function BookingForm() {
                   <Car className="size-3.5" aria-hidden="true" />
                   {i.car}
                 </span>
+                {i.phone ? (
+                  <a
+                    href={`tel:${i.phone.replace(/[^\d+]/g, '')}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-0.5 flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Phone className="size-3.5" aria-hidden="true" />
+                    {i.phone}
+                  </a>
+                ) : null}
               </span>
               <span className="text-xs font-semibold text-primary">{i.categories.join(', ')}</span>
             </button>
@@ -178,6 +188,15 @@ function BookingForm() {
                       {Number(b.date.slice(8, 10))} {MONTHS_FULL[lang][Number(b.date.slice(5, 7)) - 1]}, {b.time}
                     </p>
                     <p className="text-xs text-muted-foreground">{ins?.name}</p>
+                    {ins?.phone ? (
+                      <a
+                        href={`tel:${ins.phone.replace(/[^\d+]/g, '')}`}
+                        className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        <Phone className="size-3" aria-hidden="true" />
+                        {ins.phone}
+                      </a>
+                    ) : null}
                   </div>
                   <Button variant="ghost" size="icon" aria-label={t('cancel')} onClick={() => cancelBooking(b.id)}>
                     <Trash2 className="size-4" aria-hidden="true" />

@@ -10,7 +10,11 @@ import { cn } from '@/lib/utils'
 function Chat() {
   const { t, instructors, messages, sendMessage } = useStore()
   const threads = [{ id: 'admin', name: t('administration'), sub: 'AvtoEmir' }].concat(
-    instructors.map((i) => ({ id: i.id, name: i.name, sub: t('instructor') })),
+    instructors.map((i) => ({
+      id: i.id,
+      name: i.name,
+      sub: i.phone ? i.phone : t('instructor'),
+    })),
   )
   const [thread, setThread] = useState('admin')
   const [text, setText] = useState('')
