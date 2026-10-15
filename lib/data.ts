@@ -25,6 +25,10 @@ export type School = {
   about: L
   hours: L
   phones: string[]
+  /** Phone for enrollment / recording to driving school */
+  phoneEnrollment: string
+  /** App support hotline */
+  phoneSupport: string
   branches: Branch[]
   instagram: string
   website: string
@@ -64,6 +68,8 @@ export const seedSchool: School = {
   },
   hours: { ru: 'Пн–Сб 9:00–18:00', kk: 'Дс–Сб 9:00–18:00' },
   phones: ['+7 701 000 00 00'],
+  phoneEnrollment: '+7 701 111 11 11',
+  phoneSupport: '+7 701 222 22 22',
   instagram: 'https://www.instagram.com/avtoshkola_turkestan_avtoemir?mdxt=MWlrYTNiaTJyNnh2cw==',
   website: '',
   branches: [
