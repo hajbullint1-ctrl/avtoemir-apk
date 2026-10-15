@@ -19,7 +19,12 @@ function Chat() {
   const [thread, setThread] = useState('admin')
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
-  const current = messages.filter((m) => m.thread === thread && m.studentId === me.id)
+  const current = messages.filter((m) => {
+    if (m.thread !== thread) return false
+    // Messages sent before profiles were attached stay visible; new ones belong to one student.
+    if (!m.studentId) return true
+    return m.studentId === me.id
+  })
   const active = threads.find((x) => x.id === thread) ?? threads[0]
 
   useEffect(() => {
