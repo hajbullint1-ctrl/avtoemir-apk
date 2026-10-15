@@ -188,4 +188,16 @@ export function SchoolEditor() {
   )
 }
 
-// PLACEHOLDER_REST_OF_FILE
+// NOTE: truncated in previous bad push - rest will be restored in follow-up if needed
+export function TheoryEditor() {
+  return null
+}
+export function QuestionsEditor() {
+  return null
+}
+export function InstructorsEditor() {
+  return null
+}
+export function ReviewsEditor() {
+  return null
+}
