@@ -1,18 +1,53 @@
 /**
- * Sync shared slices (school, instructors, notices) with Supabase.
+ * Sync shared app state with Supabase (app_state table).
  * Falls back to local-only when NEXT_PUBLIC_SUPABASE_* env vars are missing.
  */
 
 import { getSupabase, isSupabaseConfigured } from './supabase'
-import type { Instructor, Notice, School } from './data'
+import type {
+  Booking,
+  Instructor,
+  Message,
+  Notice,
+  Question,
+  Review,
+  School,
+  Student,
+  TheoryTopic,
+} from './data'
 
 export type SharedSlice = {
   school?: School
   instructors?: Instructor[]
   notices?: Notice[]
+  students?: Student[]
+  theory?: TheoryTopic[]
+  questions?: Question[]
+  reviews?: Review[]
+  messages?: Message[]
+  bookings?: Booking[]
 }
 
-const KEYS = ['school', 'instructors', 'notices'] as const
+const KEYS = [
+  'school',
+  'instructors',
+  'notices',
+  'students',
+  'theory',
+  'questions',
+  'reviews',
+  'messages',
+  'bookings',
+] as const
+
+export type SharedKey = (typeof KEYS)[number]
+
+function normalizeInstructors(list: Instructor[]): Instructor[] {
+  return list.map((i) => ({
+    ...i,
+    phone: typeof i.phone === 'string' ? i.phone : '',
+  }))
+}
 
 /** Load shared data from Supabase. Returns null if not configured or on error. */
 export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
@@ -29,18 +64,37 @@ export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
 
     const out: SharedSlice = {}
     for (const row of data) {
-      if (row.key === 'school' && row.data && typeof row.data === 'object' && !Array.isArray(row.data)) {
-        const s = row.data as School
-        if (s.name) out.school = s
-      }
-      if (row.key === 'instructors' && Array.isArray(row.data)) {
-        out.instructors = (row.data as Instructor[]).map((i) => ({
-          ...i,
-          phone: typeof i.phone === 'string' ? i.phone : '',
-        }))
-      }
-      if (row.key === 'notices' && Array.isArray(row.data)) {
-        out.notices = row.data as Notice[]
+      const d = row.data
+      switch (row.key) {
+        case 'school':
+          if (d && typeof d === 'object' && !Array.isArray(d) && (d as School).name) {
+            out.school = d as School
+          }
+          break
+        case 'instructors':
+          if (Array.isArray(d) && d.length) out.instructors = normalizeInstructors(d as Instructor[])
+          break
+        case 'notices':
+          if (Array.isArray(d)) out.notices = d as Notice[]
+          break
+        case 'students':
+          if (Array.isArray(d) && d.length) out.students = d as Student[]
+          break
+        case 'theory':
+          if (Array.isArray(d) && d.length) out.theory = d as TheoryTopic[]
+          break
+        case 'questions':
+          if (Array.isArray(d) && d.length) out.questions = d as Question[]
+          break
+        case 'reviews':
+          if (Array.isArray(d)) out.reviews = d as Review[]
+          break
+        case 'messages':
+          if (Array.isArray(d)) out.messages = d as Message[]
+          break
+        case 'bookings':
+          if (Array.isArray(d)) out.bookings = d as Booking[]
+          break
       }
     }
     return out
@@ -51,7 +105,7 @@ export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
 }
 
 /** Upsert one shared key. No-op if Supabase is not configured. */
-export async function saveSharedKey(key: (typeof KEYS)[number], data: unknown): Promise<boolean> {
+export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
   const sb = getSupabase()
   if (!sb) return false
 
@@ -71,13 +125,19 @@ export async function saveSharedKey(key: (typeof KEYS)[number], data: unknown): 
   }
 }
 
-/** Push school + instructors + notices to the cloud. */
+/** Push all provided shared slices to the cloud. */
 export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (!isSupabaseConfigured) return
   const tasks: Promise<boolean>[] = []
   if (slice.school) tasks.push(saveSharedKey('school', slice.school))
   if (slice.instructors) tasks.push(saveSharedKey('instructors', slice.instructors))
   if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
+  if (slice.students) tasks.push(saveSharedKey('students', slice.students))
+  if (slice.theory) tasks.push(saveSharedKey('theory', slice.theory))
+  if (slice.questions) tasks.push(saveSharedKey('questions', slice.questions))
+  if (slice.reviews) tasks.push(saveSharedKey('reviews', slice.reviews))
+  if (slice.messages) tasks.push(saveSharedKey('messages', slice.messages))
+  if (slice.bookings) tasks.push(saveSharedKey('bookings', slice.bookings))
   await Promise.all(tasks)
 }
 

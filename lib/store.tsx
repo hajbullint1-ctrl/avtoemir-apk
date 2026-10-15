@@ -48,6 +48,8 @@ type Store = {
   addReview: (r: Omit<Review, 'id' | 'date' | 'visible'>) => void
   messages: Message[]
   sendMessage: (thread: string, text: string) => void
+  /** Admin reply: appears on student side as school message (fromMe: false) */
+  replyAsAdmin: (thread: string, text: string) => void
   notices: Notice[]
   markNoticesRead: () => void
   broadcastNotice: (title: L, body: L) => void
@@ -140,6 +142,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.notices?.length) {
         setNotices(cloud.notices)
       }
+      if (cloud?.students?.length) setStudents(cloud.students)
+      if (cloud?.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
+      if (cloud?.questions?.length) setQuestions(cloud.questions)
+      if (cloud?.reviews) setReviews(cloud.reviews)
+      if (cloud?.messages) setMessages(cloud.messages)
+      if (cloud?.bookings) setBookings(cloud.bookings)
       setReady(true)
     })()
 
@@ -174,14 +182,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     savePersisted({ students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns })
   }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns])
 
-  // Debounced push of shared slices to Supabase
+  // Debounced push of all admin-managed slices to Supabase
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
     const t = setTimeout(() => {
-      void saveSharedToCloud({ school, instructors, notices })
+      void saveSharedToCloud({
+        school,
+        instructors,
+        notices,
+        students,
+        theory,
+        questions,
+        reviews,
+        messages,
+        bookings,
+      })
     }, 800)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings])
 
   const updateStudent = useCallback((id: string, patch: (s: Student) => Student) => {
     setStudents((list) => list.map((s) => (s.id === id ? patch(s) : s)))
@@ -247,11 +265,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addReview: (r) => setReviews((list) => [{ ...r, id: uid(), date: new Date().toISOString().slice(0, 10), visible: false }, ...list]),
       messages,
       sendMessage: (thread, text) => {
+        // Student message (fromMe: true). Admin answers via replyAsAdmin — no auto-bot.
         setMessages((list) => [...list, { id: uid(), thread, fromMe: true, text, time: nowTime() }])
-        setTimeout(() => {
-          const reply = lang === 'kk' ? 'Хабарламаңыз үшін рахмет! Жақын арада жауап береміз.' : 'Спасибо за сообщение! Мы скоро ответим.'
-          setMessages((list) => [...list, { id: uid(), thread, fromMe: false, text: reply, time: nowTime() }])
-        }, 1200)
+      },
+      replyAsAdmin: (thread, text) => {
+        setMessages((list) => [...list, { id: uid(), thread, fromMe: false, text, time: nowTime() }])
       },
       notices, markNoticesRead: () => setNotices((list) => list.map((n) => ({ ...n, read: true }))),
       broadcastNotice: (title, body) => pushNotice({ kind: 'announce', title, body }),
@@ -268,6 +286,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleSign: (id, known) => setLearnedSigns((list) => (known ? Array.from(new Set([...list, id])) : list.filter((x) => x !== id))),
     }
   }, [ready, session, login, register, logout, lang, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, updateStudent, pushNotice])
+  // replyAsAdmin / sendMessage / broadcastNotice are stable enough via setState closures
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

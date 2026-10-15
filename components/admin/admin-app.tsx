@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Building2, Car, ClipboardCheck, Lock, MessageSquareText, Smartphone, Users } from 'lucide-react'
+import { ArrowLeft, Bell, BookOpen, Building2, Car, ClipboardCheck, Lock, MessageSquare, MessageSquareText, Smartphone, Users } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
+import { AdminNotifications } from './admin-notifications'
+import { AdminMessages } from './admin-messages'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor } from './admin-content'
 import { useStore } from '@/lib/store'
 import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
@@ -14,6 +16,8 @@ import { Button } from '@/components/ui/button'
 
 const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JSX.Element }[] = [
   { id: 'students', label: { ru: 'Студенты и документы', kk: 'Студенттер мен құжаттар' }, icon: Users, Comp: AdminStudents },
+  { id: 'messages', label: { ru: 'Сообщения', kk: 'Хабарламалар' }, icon: MessageSquare, Comp: AdminMessages },
+  { id: 'notifications', label: { ru: 'Уведомления', kk: 'Хабарландырулар' }, icon: Bell, Comp: AdminNotifications },
   { id: 'school', label: { ru: 'Об автошколе', kk: 'Автомектеп туралы' }, icon: Building2, Comp: SchoolEditor },
   { id: 'theory', label: { ru: 'Теория', kk: 'Теория' }, icon: BookOpen, Comp: TheoryEditor },
   { id: 'tests', label: { ru: 'Тесты', kk: 'Тесттер' }, icon: ClipboardCheck, Comp: QuestionsEditor },
