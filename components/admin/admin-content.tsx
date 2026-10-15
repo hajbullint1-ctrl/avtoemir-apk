@@ -7,6 +7,8 @@ import { Stars } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
 import { CATEGORIES, type Category, type Question, type School, type TheoryLesson, type TheoryTopic } from '@/lib/data'
 import type { L } from '@/lib/i18n'
+import { uploadTheoryCard } from '@/lib/cloud-features'
+import { studentFullName } from '@/lib/student-name'
 import { cn } from '@/lib/utils'
 
 const inputCls =
@@ -104,6 +106,64 @@ function LessonEditor({
       </div>
       <BiInput label={tl({ ru: 'Заголовок урока', kk: 'Сабақ тақырыбы' })} value={lesson.title} onChange={(title) => onChange({ ...lesson, title })} />
       <BiInput label={tl({ ru: 'Текст урока', kk: 'Сабақ мәтіні' })} value={lesson.body} onChange={(body) => onChange({ ...lesson, body })} multiline />
+      <LessonCardUpload lesson={lesson} onChange={onChange} />
+    </div>
+  )
+}
+
+function LessonCardUpload({ lesson, onChange }: { lesson: TheoryLesson; onChange: (l: TheoryLesson) => void }) {
+  const { tl } = useStore()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">
+        {tl({ ru: 'Фото-карточка урока', kk: 'Сабақтың фото-карточкасы' })}
+      </span>
+      {lesson.imageUrl ? (
+        <div className="relative inline-block max-w-xs">
+          <img src={lesson.imageUrl} alt="" className="max-h-40 rounded-lg border object-contain" />
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className="absolute right-1 top-1 size-8"
+            onClick={() => onChange({ ...lesson, imageUrl: null })}
+            aria-label={tl({ ru: 'Удалить фото', kk: 'Фотоны жою' })}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
+          <ImagePlus className="size-4" />
+          {busy
+            ? tl({ ru: 'Загрузка…', kk: 'Жүктелуде…' })
+            : tl({ ru: 'Загрузить в Supabase Storage', kk: 'Supabase Storage-ке жүктеу' })}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={async (e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              setBusy(true)
+              setError('')
+              try {
+                const url = await uploadTheoryCard(f)
+                onChange({ ...lesson, imageUrl: url })
+              } catch {
+                setError(tl({ ru: 'Не удалось загрузить фото', kk: 'Фото жүктелмеді' }))
+              } finally {
+                setBusy(false)
+              }
+            }}
+          />
+        </label>
+      )}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   )
 }
@@ -203,7 +263,40 @@ export function TheoryEditor() {
           {tl({ ru: 'Добавить тему', kk: 'Тақырып қосу' })}
         </Button>
       </form>
+      <StudentTheoryProgress />
     </Card>
+  )
+}
+
+function StudentTheoryProgress() {
+  const { students, profiles, theory, theoryProgress, tl } = useStore()
+  const total = theory.reduce((a, t) => a + (t.content?.length || t.lessons || 0), 0) || 1
+  const rows = students.filter((s) => s.id !== 'me' || students.length === 1)
+  return (
+    <div className="mt-6 border-t pt-4">
+      <h3 className="mb-2 text-sm font-semibold">
+        {tl({ ru: 'Прогресс студентов', kk: 'Студенттер прогресі' })}
+      </h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{tl({ ru: 'Пока нет студентов', kk: 'Әзірге студент жоқ' })}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map((s) => {
+            const ids = new Set(theoryProgress[s.id] ?? [])
+            const done = theory.reduce((a, t) => a + (t.content ?? []).filter((l) => ids.has(l.id)).length, 0)
+            const name = studentFullName(s.id, s.name, profiles, students) || s.name
+            return (
+              <li key={s.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
+                <span className="truncate font-medium">{name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  {done}/{total} · {Math.round((done / total) * 100)}%
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 

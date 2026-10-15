@@ -24,6 +24,48 @@ import {
 } from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
 import { isSupabaseConfigured, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
+import {
+  fetchProfiles,
+  fetchTheoryProgress,
+  upsertProfile,
+  upsertTheoryProgress,
+  type ProfileRow,
+} from './cloud-features'
+
+function mergeProfiles(local: ProfileRow[], remote: ProfileRow[]): ProfileRow[] {
+  const map = new Map(local.map((p) => [p.id, p]))
+  for (const r of remote) {
+    if (!r?.id) continue
+    const prev = map.get(r.id)
+    map.set(r.id, {
+      id: r.id,
+      full_name: (r.full_name || prev?.full_name || '').trim(),
+      phone: r.phone || prev?.phone || '',
+    })
+  }
+  return [...map.values()]
+}
+
+function mergeProgress(
+  local: Record<string, string[]>,
+  extra: Record<string, string[]> | { student_id: string; lesson_id: string }[],
+): Record<string, string[]> {
+  const out: Record<string, Set<string>> = {}
+  for (const [k, ids] of Object.entries(local)) out[k] = new Set(ids)
+  if (Array.isArray(extra)) {
+    for (const r of extra) {
+      if (!r?.student_id || !r.lesson_id) continue
+      if (!out[r.student_id]) out[r.student_id] = new Set()
+      out[r.student_id].add(r.lesson_id)
+    }
+  } else {
+    for (const [k, ids] of Object.entries(extra || {})) {
+      if (!out[k]) out[k] = new Set()
+      for (const id of ids || []) out[k].add(id)
+    }
+  }
+  return Object.fromEntries([...Object.entries(out)].map(([k, v]) => [k, [...v]]))
+}
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const nowTime = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -50,6 +92,11 @@ type Store = {
   setSchool: (s: School) => void
   theory: TheoryTopic[]
   setTheory: (t: TheoryTopic[]) => void
+  /** Supabase profiles (id → full_name), plus local mirror */
+  profiles: ProfileRow[]
+  /** Completed theory lesson ids, keyed by student account id */
+  theoryProgress: Record<string, string[]>
+  completeLesson: (lessonId: string) => void
   questions: Question[]
   setQuestions: (q: Question[]) => void
   instructors: Instructor[]
@@ -60,10 +107,14 @@ type Store = {
   messages: Message[]
   sendMessage: (thread: string, text: string) => void
   /** Admin reply: appears on student side as school message (fromMe: false) */
-  replyAsAdmin: (thread: string, text: string) => void
+  replyAsAdmin: (thread: string, text: string, meta?: { studentId?: string; authorName?: string }) => void
+  deleteMessage: (id: string) => void
+  /** Drop one student's admin thread, or an entire instructor thread when studentId is omitted */
+  deleteChat: (thread: string, studentId?: string) => void
   notices: Notice[]
   markNoticesRead: () => void
   broadcastNotice: (title: L, body: L) => void
+  deleteNotice: (id: string) => void
   bookings: Booking[]
   addBooking: (b: Omit<Booking, 'id'>) => void
   cancelBooking: (id: string) => void
@@ -98,6 +149,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [results, setResults] = useState<TestResult[]>([])
   const [learnedSigns, setLearnedSigns] = useState<string[]>([])
+  const [profiles, setProfiles] = useState<ProfileRow[]>([])
+  const [theoryProgress, setTheoryProgress] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -121,6 +174,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
       if (Array.isArray(p.results)) setResults(p.results as TestResult[])
       if (Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as string[])
+      if (Array.isArray(p.profiles)) setProfiles(p.profiles as ProfileRow[])
+      if (p.theoryProgress && typeof p.theoryProgress === 'object') setTheoryProgress(p.theoryProgress as Record<string, string[]>)
     }
 
     // Overlay shared data from Supabase when configured (wins over local for school / instructors / notices)
@@ -163,6 +218,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
       if (cloud?.results) setResults(cloud.results)
       if (cloud?.learnedSigns) setLearnedSigns(cloud.learnedSigns)
+      if (Array.isArray(cloud?.profiles)) setProfiles(cloud.profiles)
+      if (cloud?.theoryProgress && typeof cloud.theoryProgress === 'object') setTheoryProgress(cloud.theoryProgress)
+      const tableProfiles = await fetchProfiles()
+      if (!cancelled && tableProfiles.length) setProfiles((prev) => mergeProfiles(prev, tableProfiles))
+      const progressRows = await fetchTheoryProgress()
+      if (!cancelled && progressRows.length) setTheoryProgress((prev) => mergeProgress(prev, progressRows))
+      const sess = loadSession()
+      if (sess?.accountId && sess.fullName) {
+        void upsertProfile({ id: sess.accountId, full_name: sess.fullName, phone: sess.phone })
+      }
       // Push local accounts up if cloud was empty (first device bootstrap)
       const localAccounts = listAccounts()
       if (localAccounts.length && (!cloud?.accounts || cloud.accounts.length === 0)) {
@@ -193,6 +258,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(data.bookings)) setBookings(data.bookings as Booking[])
       if (Array.isArray(data.results)) setResults(data.results as TestResult[])
       if (Array.isArray(data.learnedSigns)) setLearnedSigns(data.learnedSigns as string[])
+      if (Array.isArray(data.profiles)) setProfiles(data.profiles as ProfileRow[])
+      if (data.theoryProgress && typeof data.theoryProgress === 'object') setTheoryProgress(data.theoryProgress as Record<string, string[]>)
     })
 
     return () => {
@@ -203,8 +270,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return
-    savePersisted({ students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns })
-  }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns])
+    savePersisted({ students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, profiles, theoryProgress })
+  }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, profiles, theoryProgress])
 
   // Register cloud push for accounts / recovery (auth.ts calls these on change)
   useEffect(() => {
@@ -250,10 +317,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         recovery: listPasswordRecoveryRequests(),
         results,
         learnedSigns,
+        profiles,
+        theoryProgress,
       })
     }, 800)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns, profiles, theoryProgress])
 
   // Periodic pull from cloud so admin changes appear on student devices
   useEffect(() => {
@@ -276,6 +345,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
       if (cloud.questions?.length) setQuestions(cloud.questions)
       if (cloud.reviews) setReviews(cloud.reviews)
+      if (Array.isArray(cloud.profiles)) setProfiles((prev) => mergeProfiles(prev, cloud.profiles!))
+      if (cloud.theoryProgress) setTheoryProgress((prev) => mergeProgress(prev, cloud.theoryProgress!))
+      const tableProfiles = await fetchProfiles()
+      if (tableProfiles.length) setProfiles((prev) => mergeProfiles(prev, tableProfiles))
+      const progressRows = await fetchTheoryProgress()
+      if (progressRows.length) setTheoryProgress((prev) => mergeProgress(prev, progressRows))
     }
     const id = setInterval(pull, 15000)
     return () => clearInterval(id)
@@ -293,6 +368,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const res = loginAccount(phone, password)
     if (!res.ok) return res
     setSession(res.session)
+    void upsertProfile({ id: res.session.accountId, full_name: res.session.fullName, phone: res.session.phone })
+    setProfiles((prev) => mergeProfiles(prev, [{ id: res.session.accountId, full_name: res.session.fullName, phone: res.session.phone }]))
     setStudents((list) => {
       if (list.some((s) => s.phone === res.session.phone || s.id === res.session.accountId)) return list
       const me: Student = {
@@ -308,6 +385,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const res = registerAccount(fullName, phone, password)
     if (!res.ok) return res
     setSession(res.session)
+    void upsertProfile({ id: res.session.accountId, full_name: res.session.fullName, phone: res.session.phone })
+    setProfiles((prev) => mergeProfiles(prev, [{ id: res.session.accountId, full_name: res.session.fullName, phone: res.session.phone }]))
     const me: Student = {
       id: res.session.accountId, name: res.session.fullName, phone: res.session.phone, category: 'B',
       docs: { idFront: null, idBack: null, psycho: null, narco: null }, status: 'draft', readyDate: null, submittedAt: null,
@@ -364,18 +443,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updateStudent(id, (s) => ({ ...s, status: 'rejected', readyDate: null }))
         if (id === me.id) pushNotice({ kind: 'docs', title: { ru: 'Документы отклонены', kk: 'Құжаттар қабылданбады' }, body: { ru: 'Пожалуйста, загрузите документы повторно.', kk: 'Құжаттарды қайта жүктеңіз.' } })
       },
-      school, setSchool, theory, setTheory, questions, setQuestions, instructors, setInstructors, reviews, setReviews,
+      school, setSchool, theory, setTheory, profiles, theoryProgress,
+      completeLesson: (lessonId) => {
+        const sid = session?.accountId
+        if (!sid || !lessonId) return
+        setTheoryProgress((prev) => {
+          const cur = new Set(prev[sid] ?? [])
+          if (cur.has(lessonId)) return prev
+          cur.add(lessonId)
+          return { ...prev, [sid]: [...cur] }
+        })
+        void upsertTheoryProgress(sid, lessonId)
+      },
+      questions, setQuestions, instructors, setInstructors, reviews, setReviews,
       addReview: (r) => setReviews((list) => [{ ...r, id: uid(), date: new Date().toISOString().slice(0, 10), visible: false }, ...list]),
       messages,
       sendMessage: (thread, text) => {
-        // Student message (fromMe: true). Admin answers via replyAsAdmin — no auto-bot.
-        setMessages((list) => [...list, { id: uid(), thread, fromMe: true, text, time: nowTime() }])
+        const studentId = session?.accountId
+        const authorName = session?.fullName
+        setMessages((list) => [...list, { id: uid(), thread, fromMe: true, text, time: nowTime(), studentId, authorName }])
+        if (studentId && authorName) {
+          const row = { id: studentId, full_name: authorName, phone: session?.phone ?? '' }
+          setProfiles((prev) => mergeProfiles(prev, [row]))
+          void upsertProfile(row)
+        }
       },
-      replyAsAdmin: (thread, text) => {
-        setMessages((list) => [...list, { id: uid(), thread, fromMe: false, text, time: nowTime() }])
+      replyAsAdmin: (thread, text, meta) => {
+        setMessages((list) => [
+          ...list,
+          {
+            id: uid(),
+            thread,
+            fromMe: false,
+            text,
+            time: nowTime(),
+            studentId: meta?.studentId,
+            authorName: meta?.authorName,
+          },
+        ])
       },
+      deleteMessage: (id) => setMessages((list) => list.filter((m) => m.id !== id)),
+      deleteChat: (thread, studentId) =>
+        setMessages((list) =>
+          list.filter((m) => {
+            if (m.thread !== thread) return true
+            if (studentId) return m.studentId !== studentId
+            return false
+          }),
+        ),
       notices, markNoticesRead: () => setNotices((list) => list.map((n) => ({ ...n, read: true }))),
       broadcastNotice: (title, body) => pushNotice({ kind: 'announce', title, body }),
+      deleteNotice: (id) => setNotices((list) => list.filter((n) => n.id !== id)),
       bookings,
       addBooking: (b) => {
         setBookings((list) => [...list, { ...b, id: uid() }])
@@ -388,7 +506,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       learnedSigns,
       toggleSign: (id, known) => setLearnedSigns((list) => (known ? Array.from(new Set([...list, id])) : list.filter((x) => x !== id))),
     }
-  }, [ready, session, login, register, logout, lang, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, updateStudent, pushNotice])
+  }, [ready, session, login, register, logout, lang, students, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, updateStudent, pushNotice])
   // replyAsAdmin / sendMessage / broadcastNotice are stable enough via setState closures
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

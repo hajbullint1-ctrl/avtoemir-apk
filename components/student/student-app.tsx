@@ -43,7 +43,7 @@ export function StudentApp() {
   return (
     <div className="flex min-h-dvh flex-col bg-muted/60 md:items-center md:justify-center md:p-6">
       <div className="flex h-dvh w-full flex-col overflow-hidden bg-background md:h-[min(880px,calc(100dvh-3rem))] md:max-w-[420px] md:rounded-[2.25rem] md:border-[6px] md:border-foreground/90 md:shadow-2xl">
-        <header className="flex shrink-0 items-center justify-between gap-2 bg-primary px-4 pb-3 pt-4 text-primary-foreground">
+        <header className="app-safe-header flex shrink-0 items-center justify-between gap-2 bg-primary px-4 pb-3 text-primary-foreground">
           <div className="flex items-center gap-2">
             <span className="flex size-9 items-center justify-center rounded-xl bg-primary-foreground text-primary">
               <Car className="size-5" aria-hidden="true" />

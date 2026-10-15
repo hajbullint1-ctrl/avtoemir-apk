@@ -94,3 +94,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Android status bar: viewport-fit=cover is set in app/layout.tsx */
+.app-safe-header {
+  padding-top: max(20px, env(safe-area-inset-top));
+}

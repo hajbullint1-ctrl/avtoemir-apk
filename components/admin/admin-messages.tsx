@@ -1,43 +1,69 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, SendHorizontal } from 'lucide-react'
+import { MessageSquare, SendHorizontal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
+import { studentFullName } from '@/lib/student-name'
 import { cn } from '@/lib/utils'
 
 /**
- * Admin inbox: threads = students who wrote to administration (thread "admin").
- * Student messages: fromMe === true
- * Admin replies: fromMe === false (shown on student side as school reply)
+ * Admin inbox: one thread per student (messages.thread === "admin" + studentId).
+ * Student messages: fromMe === true. Admin replies: fromMe === false.
  */
 export function AdminMessages() {
-  const { messages, students, replyAsAdmin, tl } = useStore()
+  const { messages, students, profiles, replyAsAdmin, deleteMessage, deleteChat, tl } = useStore()
   const listRef = useRef<HTMLDivElement>(null)
   const [text, setText] = useState('')
 
-  const adminMsgs = useMemo(() => messages.filter((m) => m.thread === 'admin'), [messages])
+  const threads = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of students) {
+      if (s.id === 'me' && students.some((x) => x.id !== 'me')) continue
+      const name = studentFullName(s.id, s.name, profiles, students) || s.name
+      map.set(s.id, name)
+    }
+    for (const m of messages) {
+      if (m.thread !== 'admin' || !m.studentId || map.has(m.studentId)) continue
+      map.set(m.studentId, studentFullName(m.studentId, m.authorName, profiles, students) || m.authorName || '')
+    }
+    const legacy = messages.some((m) => m.thread === 'admin' && !m.studentId)
+    const list = [...map.entries()].map(([id, name]) => ({ id, name: name || '—', legacy: false }))
+    if (legacy) list.push({ id: 'legacy', name: tl({ ru: 'Без профиля', kk: 'Профильсіз' }), legacy: true })
+    return list
+  }, [messages, students, profiles, tl])
 
-  // Group by approximate student: we only have one shared "admin" thread in current model.
-  // Show full admin thread; optional filter by student name is future work.
-  const [activeThread] = useState('admin')
-  const current = adminMsgs
+  const [active, setActive] = useState<string>('')
+  useEffect(() => {
+    if (!active && threads[0]) setActive(threads[0].id)
+    else if (active && threads.length && !threads.some((t) => t.id === active)) setActive(threads[0]?.id ?? '')
+  }, [threads, active])
+
+  const current = useMemo(
+    () =>
+      messages.filter((m) => {
+        if (m.thread !== 'admin') return false
+        if (active === 'legacy') return !m.studentId
+        return m.studentId === active
+      }),
+    [messages, active],
+  )
+
+  const activeThread = threads.find((t) => t.id === active)
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
-  }, [current.length])
+  }, [current.length, active])
 
   const submit = () => {
     const v = text.trim()
-    if (!v) return
-    replyAsAdmin(activeThread, v)
+    if (!v || !active || active === 'legacy') return
+    replyAsAdmin('admin', v, { studentId: active, authorName: tl({ ru: 'Администрация', kk: 'Әкімшілік' }) })
     setText('')
   }
 
-  const studentHint =
-    students.find((s) => s.status === 'pending')?.name ||
-    students[0]?.name ||
-    tl({ ru: 'Студенты', kk: 'Студенттер' })
+  const labelOf = (studentId?: string, authorName?: string) =>
+    studentFullName(studentId, authorName, profiles, students) || tl({ ru: 'Студент', kk: 'Студент' })
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,57 +78,97 @@ export function AdminMessages() {
             </h2>
             <p className="text-sm text-muted-foreground">
               {tl({
-                ru: 'Ответы уходят в чат кабинета студента (Администрация) и сохраняются в базе.',
-                kk: 'Жауаптар студент кабинетіндегі чатқа (Әкімшілік) кетеді және базаға сақталады.',
+                ru: 'Имя берётся из профиля (full_name). Ответ уходит в чат этого студента.',
+                kk: 'Аты профильден (full_name) алынады. Жауап сол студенттің чатына кетеді.',
               })}
             </p>
           </div>
         </div>
 
+        {threads.length > 0 && (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            {threads.map((th) => (
+              <button
+                key={th.id}
+                type="button"
+                onClick={() => setActive(th.id)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1 text-sm',
+                  active === th.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card',
+                )}
+              >
+                {th.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="rounded-xl border bg-muted/40">
-          <div className="flex items-center gap-2 border-b px-3 py-2">
-            <span className="size-2 rounded-full bg-success" aria-hidden="true" />
-            <span className="text-sm font-semibold">
-              {tl({ ru: 'Администрация ↔ студенты', kk: 'Әкімшілік ↔ студенттер' })}
-            </span>
-            <span className="text-xs text-muted-foreground">• {studentHint}</span>
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden="true" />
+              <span className="truncate text-sm font-semibold">
+                {activeThread?.name ?? tl({ ru: 'Выберите студента', kk: 'Студентті таңдаңыз' })}
+              </span>
+            </div>
+            {active && current.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => {
+                  if (active === 'legacy') {
+                    for (const m of current) deleteMessage(m.id)
+                  } else {
+                    deleteChat('admin', active)
+                  }
+                }}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                {tl({ ru: 'Удалить чат', kk: 'Чатты жою' })}
+              </Button>
+            )}
           </div>
 
           <div ref={listRef} className="flex h-80 flex-col gap-2 overflow-y-auto p-3" aria-live="polite">
             {current.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 {tl({
-                  ru: 'Пока нет сообщений. Когда студент напишет в чат «Администрация», оно появится здесь.',
-                  kk: 'Әзірге хабарлама жоқ. Студент «Әкімшілік» чатына жазса, мұнда көрінеді.',
+                  ru: 'Пока нет сообщений. Когда студент напишет в «Администрация», оно появится здесь с его именем.',
+                  kk: 'Әзірге хабарлама жоқ. Студент «Әкімшілік» чатына жазса, атымен мұнда көрінеді.',
                 })}
               </p>
             ) : (
               current.map((m) => {
-                // fromMe true = student; false = admin reply
                 const isStudent = m.fromMe
+                const who = isStudent
+                  ? labelOf(m.studentId ?? (active !== 'legacy' ? active : undefined), m.authorName)
+                  : m.authorName || tl({ ru: 'Вы (админ)', kk: 'Сіз (админ)' })
                 return (
                   <div
                     key={m.id}
                     className={cn(
-                      'max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                      'group relative max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
                       isStudent
                         ? 'self-start rounded-bl-sm border bg-card'
                         : 'self-end rounded-br-sm bg-primary text-primary-foreground',
                     )}
                   >
                     <span className={cn('mb-0.5 block text-[10px] font-medium', isStudent ? 'text-muted-foreground' : 'opacity-80')}>
-                      {isStudent
-                        ? tl({ ru: 'Студент', kk: 'Студент' })
-                        : tl({ ru: 'Вы (админ)', kk: 'Сіз (админ)' })}
+                      {who}
                     </span>
                     {m.text}
-                    <span
-                      className={cn(
-                        'mt-0.5 block text-right text-[10px]',
-                        isStudent ? 'text-muted-foreground' : 'opacity-75',
-                      )}
-                    >
+                    <span className={cn('mt-0.5 flex items-center justify-end gap-2 text-[10px]', isStudent ? 'text-muted-foreground' : 'opacity-75')}>
                       {m.time}
+                      <button
+                        type="button"
+                        className="opacity-70 hover:opacity-100"
+                        aria-label={tl({ ru: 'Удалить сообщение', kk: 'Хабарламаны жою' })}
+                        onClick={() => deleteMessage(m.id)}
+                      >
+                        <Trash2 className="size-3" aria-hidden="true" />
+                      </button>
                     </span>
                   </div>
                 )
@@ -120,10 +186,11 @@ export function AdminMessages() {
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="h-10 min-w-0 flex-1 rounded-lg border bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              disabled={!active || active === 'legacy'}
+              className="h-10 min-w-0 flex-1 rounded-lg border bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
               placeholder={tl({ ru: 'Ответ студенту…', kk: 'Студентке жауап…' })}
             />
-            <Button type="submit" size="icon" aria-label={tl({ ru: 'Отправить', kk: 'Жіберу' })}>
+            <Button type="submit" size="icon" aria-label={tl({ ru: 'Отправить', kk: 'Жіберу' })} disabled={!text.trim() || !active || active === 'legacy'}>
               <SendHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </form>

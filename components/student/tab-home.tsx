@@ -110,11 +110,12 @@ function StatusCard() {
 }
 
 export function TabHome() {
-  const { me, setCategory, submitDocs, t, tl, theory, results, bookings, school } = useStore()
+  const { me, setCategory, submitDocs, t, tl, theory, theoryProgress, results, bookings, school } = useStore()
   const allUploaded = Object.values(me.docs).every(Boolean)
   const canEdit = me.status === 'draft' || me.status === 'rejected'
-  const totalLessons = theory.reduce((a, b) => a + b.lessons, 0)
-  const doneLessons = theory.reduce((a, b) => a + b.done, 0)
+  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const totalLessons = theory.reduce((a, b) => a + (b.content?.length || b.lessons || 0), 0) || 1
+  const doneLessons = theory.reduce((a, b) => a + (b.content ?? []).filter((l) => doneIds.has(l.id)).length, 0)
   const best = results.length ? Math.max(...results.map((r) => Math.round((r.score / r.total) * 100))) : 0
 
   return (

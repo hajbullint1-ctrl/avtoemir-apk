@@ -34,12 +34,24 @@ export type School = {
   website: string
 }
 
-export type TheoryLesson = { id: string; title: L; body: L }
+export type TheoryLesson = { id: string; title: L; body: L; imageUrl?: string | null }
 export type TheoryTopic = { id: string; title: L; lessons: number; done: number; content?: TheoryLesson[] }
 export type Question = { id: string; q: L; options: L[]; correct: number; explain: L; imageUrl?: string | null }
 export type Instructor = { id: string; name: string; phone: string; car: string; categories: Category[]; slots: string[] }
 export type Review = { id: string; author: string; rating: number; text: string; date: string; visible: boolean }
-export type Message = { id: string; thread: string; fromMe: boolean; text: string; time: string }
+export type Message = {
+  id: string
+  thread: string
+  fromMe: boolean
+  text: string
+  time: string
+  /** Student account id. Admin replies in that student's chat keep the same id. */
+  studentId?: string
+  /** Snapshot of profiles.full_name (or admin/instructor label) */
+  authorName?: string
+}
+
+export type Profile = { id: string; full_name: string; phone: string }
 export type Notice = { id: string; kind: 'lesson' | 'docs' | 'info' | 'announce'; title: L; body: L; time: string; read: boolean }
 export type Booking = { id: string; date: string; time: string; instructorId: string }
 export type TestResult = { id: string; date: string; score: number; total: number }

@@ -7,6 +7,7 @@ import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
 import { AdminNotifications } from './admin-notifications'
 import { AdminMessages } from './admin-messages'
+import { AdminInstructorChat } from './admin-instructor-chat'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor } from './admin-content'
 import { useStore } from '@/lib/store'
 import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/button'
 const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JSX.Element }[] = [
   { id: 'students', label: { ru: 'Студенты и документы', kk: 'Студенттер мен құжаттар' }, icon: Users, Comp: AdminStudents },
   { id: 'messages', label: { ru: 'Сообщения', kk: 'Хабарламалар' }, icon: MessageSquare, Comp: AdminMessages },
+  { id: 'instructors-chat', label: { ru: 'Чат инструкторов', kk: 'Нұсқаушылар чаты' }, icon: Car, Comp: AdminInstructorChat },
   { id: 'notifications', label: { ru: 'Уведомления', kk: 'Хабарландырулар' }, icon: Bell, Comp: AdminNotifications },
   { id: 'school', label: { ru: 'Об автошколе', kk: 'Автомектеп туралы' }, icon: Building2, Comp: SchoolEditor },
   { id: 'theory', label: { ru: 'Теория', kk: 'Теория' }, icon: BookOpen, Comp: TheoryEditor },

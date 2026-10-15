@@ -8,7 +8,7 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 function Chat() {
-  const { t, instructors, messages, sendMessage } = useStore()
+  const { t, me, instructors, messages, sendMessage } = useStore()
   const threads = [{ id: 'admin', name: t('administration'), sub: 'AvtoEmir' }].concat(
     instructors.map((i) => ({
       id: i.id,
@@ -19,7 +19,7 @@ function Chat() {
   const [thread, setThread] = useState('admin')
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
-  const current = messages.filter((m) => m.thread === thread)
+  const current = messages.filter((m) => m.thread === thread && m.studentId === me.id)
   const active = threads.find((x) => x.id === thread) ?? threads[0]
 
   useEffect(() => {

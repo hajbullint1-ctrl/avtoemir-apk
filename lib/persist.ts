@@ -14,6 +14,8 @@ export type PersistedSlice = {
   bookings?: unknown
   results?: unknown
   learnedSigns?: unknown
+  profiles?: unknown
+  theoryProgress?: unknown
   updatedAt?: number
 }
 

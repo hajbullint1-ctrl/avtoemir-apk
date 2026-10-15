@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Megaphone, Send } from 'lucide-react'
+import { Bell, Megaphone, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import type { L } from '@/lib/i18n'
@@ -11,7 +11,7 @@ const inputCls =
   'h-10 w-full rounded-lg border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
 
 export function AdminNotifications() {
-  const { broadcastNotice, notices, tl } = useStore()
+  const { broadcastNotice, deleteNotice, notices, tl } = useStore()
   const [titleRu, setTitleRu] = useState('')
   const [titleKk, setTitleKk] = useState('')
   const [bodyRu, setBodyRu] = useState('')
@@ -126,7 +126,19 @@ export function AdminNotifications() {
               <li key={n.id} className="rounded-xl border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">{tl(n.title)}</p>
-                  <span className="text-xs text-muted-foreground">{n.time}</span>
+                  <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {n.time}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-destructive"
+                      aria-label={tl({ ru: 'Удалить уведомление', kk: 'Хабарландыруды жою' })}
+                      onClick={() => deleteNotice(n.id)}
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </Button>
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{tl(n.body)}</p>
               </li>

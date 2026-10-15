@@ -16,17 +16,15 @@ function TheoryDetail({
   topic: TheoryTopic
   onBack: () => void
 }) {
-  const { theory, setTheory, t, tl } = useStore()
+  const { me, theoryProgress, completeLesson, t, tl } = useStore()
   const lessons = topic.content ?? []
   const [lessonIdx, setLessonIdx] = useState(0)
   const lesson = lessons[lessonIdx]
+  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const lessonDone = lesson ? doneIds.has(lesson.id) : false
 
   const markDone = () => {
-    setTheory(
-      theory.map((x) =>
-        x.id === topic.id ? { ...x, done: Math.min(x.lessons, Math.max(x.done, lessonIdx + 1)) } : x,
-      ),
-    )
+    if (lesson) completeLesson(lesson.id)
   }
 
   if (lessons.length === 0) {
@@ -58,6 +56,9 @@ function TheoryDetail({
       <p className="mb-4 text-xs text-muted-foreground">
         {tl({ ru: 'Урок', kk: 'Сабақ' })} {lessonIdx + 1} {t('of')} {lessons.length}
       </p>
+      {lesson.imageUrl ? (
+        <img src={lesson.imageUrl} alt="" className="mb-4 max-h-64 w-full rounded-xl border bg-muted/40 object-contain" />
+      ) : null}
       <div className="mb-6 whitespace-pre-wrap text-sm leading-relaxed text-pretty">{tl(lesson.body)}</div>
       <div className="flex items-center gap-2">
         <Button
@@ -69,9 +70,11 @@ function TheoryDetail({
         >
           <ChevronLeft className="size-4" aria-hidden="true" />
         </Button>
-        <Button className="flex-1" onClick={markDone}>
+        <Button className="flex-1" variant={lessonDone ? 'secondary' : 'default'} onClick={markDone}>
           <CheckCircle2 className="size-4" aria-hidden="true" />
-          {t('completeLesson')}
+          {lessonDone
+            ? tl({ ru: 'Урок пройден', kk: 'Сабақ өтілді' })
+            : t('completeLesson')}
         </Button>
         <Button
           variant="outline"
@@ -90,11 +93,19 @@ function TheoryDetail({
   )
 }
 
+function topicStats(topic: TheoryTopic, doneIds: Set<string>) {
+  const lessons = topic.content ?? []
+  const total = lessons.length || topic.lessons || 0
+  const done = lessons.filter((l) => doneIds.has(l.id)).length
+  return { total, done }
+}
+
 function Curriculum() {
-  const { theory, t, tl } = useStore()
+  const { me, theory, theoryProgress, t, tl } = useStore()
   const [openId, setOpenId] = useState<string | null>(null)
-  const total = theory.reduce((a, b) => a + b.lessons, 0) || 1
-  const done = theory.reduce((a, b) => a + b.done, 0)
+  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const total = theory.reduce((a, b) => a + topicStats(b, doneIds).total, 0) || 1
+  const done = theory.reduce((a, b) => a + topicStats(b, doneIds).done, 0)
   const openTopic = theory.find((x) => x.id === openId)
 
   if (openTopic) {
@@ -106,7 +117,8 @@ function Curriculum() {
       <ProgressBar value={(done / total) * 100} label={t('curriculum')} className="mb-4" />
       <ol className="flex flex-col gap-2">
         {theory.map((topic, idx) => {
-          const complete = topic.done >= topic.lessons
+          const stats = topicStats(topic, doneIds)
+          const complete = stats.total > 0 && stats.done >= stats.total
           return (
             <li key={topic.id} className="flex items-center gap-3 rounded-xl border p-3">
               <span
@@ -120,9 +132,9 @@ function Curriculum() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug">{tl(topic.title)}</p>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <ProgressBar value={(topic.done / Math.max(1, topic.lessons)) * 100} className="h-1.5" label={tl(topic.title)} />
+                  <ProgressBar value={(stats.done / Math.max(1, stats.total)) * 100} className="h-1.5" label={tl(topic.title)} />
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {topic.done}/{topic.lessons}
+                    {stats.done}/{stats.total}
                   </span>
                 </div>
               </div>
