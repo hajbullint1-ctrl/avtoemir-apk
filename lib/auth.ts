@@ -62,8 +62,79 @@ function loadAccounts(): Account[] {
   }
 }
 
+/** Optional hook: store registers a debounced push to Supabase. */
+let onAccountsChanged: ((list: Account[]) => void) | null = null
+let onRecoveryChanged: ((list: PasswordRecoveryRequest[]) => void) | null = null
+
+export function setAccountsCloudHooks(hooks: {
+  onAccounts?: (list: Account[]) => void
+  onRecovery?: (list: PasswordRecoveryRequest[]) => void
+}) {
+  onAccountsChanged = hooks.onAccounts ?? null
+  onRecoveryChanged = hooks.onRecovery ?? null
+}
+
 function saveAccounts(list: Account[]) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list))
+  onAccountsChanged?.(list)
+}
+
+/**
+ * Merge remote accounts into local (by id, then phone).
+ * Remote passwordPlain wins when present so admin recovery works on any device.
+ */
+export function mergeAccountsFromCloud(remote: Account[]): Account[] {
+  if (!Array.isArray(remote) || remote.length === 0) return loadAccounts()
+  const local = loadAccounts()
+  const byId = new Map(local.map((a) => [a.id, a]))
+  const byPhone = new Map(local.map((a) => [normalizePhone(a.phone), a]))
+
+  for (const r of remote) {
+    const phone = normalizePhone(r.phone)
+    const existing = byId.get(r.id) ?? byPhone.get(phone)
+    if (!existing) {
+      const next = { ...r, phone }
+      local.push(next)
+      byId.set(next.id, next)
+      byPhone.set(phone, next)
+    } else {
+      const idx = local.findIndex((a) => a.id === existing.id)
+      if (idx < 0) continue
+      local[idx] = {
+        ...existing,
+        ...r,
+        id: existing.id,
+        phone: phone || existing.phone,
+        passwordHash: r.passwordHash || existing.passwordHash,
+        passwordPlain: r.passwordPlain ?? existing.passwordPlain,
+        fullName: r.fullName || existing.fullName,
+        createdAt: existing.createdAt || r.createdAt,
+      }
+      byId.set(local[idx].id, local[idx])
+      byPhone.set(normalizePhone(local[idx].phone), local[idx])
+    }
+  }
+  // Write without re-triggering cloud push storm on hydrate
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(local))
+  return local
+}
+
+export function mergeRecoveryFromCloud(remote: PasswordRecoveryRequest[]): PasswordRecoveryRequest[] {
+  if (!Array.isArray(remote)) return loadRecoveryRequests()
+  const local = loadRecoveryRequests()
+  const byId = new Map(local.map((r) => [r.id, r]))
+  for (const r of remote) {
+    const prev = byId.get(r.id)
+    if (!prev) {
+      local.push(r)
+      byId.set(r.id, r)
+    } else {
+      const idx = local.findIndex((x) => x.id === r.id)
+      if (idx >= 0) local[idx] = { ...prev, ...r, resolved: prev.resolved || r.resolved }
+    }
+  }
+  localStorage.setItem(RECOVERY_KEY, JSON.stringify(local))
+  return local
 }
 
 export function listAccounts(): Account[] {
@@ -174,6 +245,7 @@ function loadRecoveryRequests(): PasswordRecoveryRequest[] {
 
 function saveRecoveryRequests(list: PasswordRecoveryRequest[]) {
   localStorage.setItem(RECOVERY_KEY, JSON.stringify(list))
+  onRecoveryChanged?.(list)
 }
 
 export function listPasswordRecoveryRequests(): PasswordRecoveryRequest[] {

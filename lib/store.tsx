@@ -10,9 +10,20 @@ import {
   type Booking, type Category, type DocFile, type DocKey, type Instructor, type Message,
   type Notice, type Question, type Review, type School, type Student, type TestResult, type TheoryTopic,
 } from './data'
-import { clearSession, loadSession, loginAccount, registerAccount, type Session } from './auth'
+import {
+  clearSession,
+  listAccounts,
+  listPasswordRecoveryRequests,
+  loadSession,
+  loginAccount,
+  mergeAccountsFromCloud,
+  mergeRecoveryFromCloud,
+  registerAccount,
+  setAccountsCloudHooks,
+  type Session,
+} from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
-import { isSupabaseConfigured, loadSharedFromCloud, saveSharedToCloud } from './sync'
+import { isSupabaseConfigured, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const nowTime = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -148,6 +159,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.reviews) setReviews(cloud.reviews)
       if (cloud?.messages) setMessages(cloud.messages)
       if (cloud?.bookings) setBookings(cloud.bookings)
+      if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts)
+      if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
+      // Push local accounts up if cloud was empty (first device bootstrap)
+      const localAccounts = listAccounts()
+      if (localAccounts.length && (!cloud?.accounts || cloud.accounts.length === 0)) {
+        void saveSharedKey('accounts', localAccounts)
+      }
+      const localRecovery = listPasswordRecoveryRequests()
+      if (localRecovery.length && (!cloud?.recovery || cloud.recovery.length === 0)) {
+        void saveSharedKey('recovery', localRecovery)
+      }
       setReady(true)
     })()
 
@@ -182,6 +204,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     savePersisted({ students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns })
   }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns])
 
+  // Register cloud push for accounts / recovery (auth.ts calls these on change)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let accTimer: ReturnType<typeof setTimeout> | null = null
+    let recTimer: ReturnType<typeof setTimeout> | null = null
+    setAccountsCloudHooks({
+      onAccounts: (list) => {
+        if (accTimer) clearTimeout(accTimer)
+        accTimer = setTimeout(() => {
+          void saveSharedKey('accounts', list)
+        }, 600)
+      },
+      onRecovery: (list) => {
+        if (recTimer) clearTimeout(recTimer)
+        recTimer = setTimeout(() => {
+          void saveSharedKey('recovery', list)
+        }, 600)
+      },
+    })
+    return () => {
+      setAccountsCloudHooks({})
+      if (accTimer) clearTimeout(accTimer)
+      if (recTimer) clearTimeout(recTimer)
+    }
+  }, [])
+
   // Debounced push of all admin-managed slices to Supabase
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
@@ -196,6 +244,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         reviews,
         messages,
         bookings,
+        accounts: listAccounts(),
+        recovery: listPasswordRecoveryRequests(),
       })
     }, 800)
     return () => clearTimeout(t)
