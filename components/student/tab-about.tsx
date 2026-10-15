@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Clock, ExternalLink, Globe, Instagram, MapPin, MessageSquarePlus, Phone, X } from 'lucide-react'
+import { Clock, ExternalLink, Globe, Share2, MapPin, MessageSquarePlus, Phone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, Stars } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
@@ -161,7 +161,7 @@ export function TabAbout() {
               className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
             >
               <span className="flex items-center gap-2">
-                <Instagram className="size-4 text-primary" aria-hidden="true" />
+                <Share2 className="size-4 text-primary" aria-hidden="true" />
                 Instagram
               </span>
               <ExternalLink className="size-4 text-muted-foreground" aria-hidden="true" />
