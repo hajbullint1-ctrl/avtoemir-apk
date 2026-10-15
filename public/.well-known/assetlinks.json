@@ -1,10 +1,8 @@
 [{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "twa.project.avtoemir",
-    "sha256_cert_fingerprints": [
-      "99:1F:2B:0C:C7:49:17:A9:59:37:58:FC:D9:76:FF:41:E7:B2:DB:FD:7B:A5:45:5E:4C:12:B0:B7:5D:E6:07:2D"
-    ]
-  }
-}]
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.avtoemir.app",
+        "sha256_cert_fingerprints": ["57:67:E5:49:1E:46:C7:11:88:5E:4C:AF:98:52:39:C8:60:2E:12:EC:0A:A8:78:0A:08:BE:A3:24:71:29:FC:78"]
+      }
+    }]
