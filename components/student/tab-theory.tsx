@@ -1,1 +1,269 @@
-$(cat /tmp/avtoemir/tab-theory.tsx)
+'use client'
+
+import { useState } from 'react'
+import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, RotateCcw, ThumbsUp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Section, ProgressBar } from '@/components/shared/section'
+import { RoadSignGraphic } from './road-sign'
+import { useStore } from '@/lib/store'
+import { type TheoryTopic } from '@/lib/data'
+import { cn } from '@/lib/utils'
+
+function TheoryDetail({
+  topic,
+  onBack,
+}: {
+  topic: TheoryTopic
+  onBack: () => void
+}) {
+  const { me, theoryProgress, completeLesson, t, tl } = useStore()
+  const lessons = topic.content ?? []
+  const [lessonIdx, setLessonIdx] = useState(0)
+  const lesson = lessons[lessonIdx]
+  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const lessonDone = lesson ? doneIds.has(lesson.id) : false
+
+  const markDone = () => {
+    if (lesson) completeLesson(lesson.id)
+  }
+
+  if (lessons.length === 0) {
+    return (
+      <Section>
+        <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={onBack}>
+          <ChevronLeft className="size-4" aria-hidden="true" />
+          {t('curriculum')}
+        </Button>
+        <h2 className="mb-2 text-lg font-bold">{tl(topic.title)}</h2>
+        <p className="text-sm text-muted-foreground">
+          {tl({
+            ru: 'Подробный текст уроков пока не добавлен. Администратор может заполнить его в панели управления.',
+            kk: 'Сабақтардың толық мәтіні әзірге қосылмаған. Әкімші оны басқару панелінде толтыра алады.',
+          })}
+        </p>
+      </Section>
+    )
+  }
+
+  return (
+    <Section>
+      <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={onBack}>
+        <ChevronLeft className="size-4" aria-hidden="true" />
+        {t('curriculum')}
+      </Button>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{tl(topic.title)}</p>
+      <h2 className="mb-1 text-lg font-bold leading-snug">{tl(lesson.title)}</h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        {tl({ ru: 'Урок', kk: 'Сабақ' })} {lessonIdx + 1} {t('of')} {lessons.length}
+      </p>
+      {lesson.imageUrl ? (
+        <img src={lesson.imageUrl} alt="" className="mb-4 max-h-64 w-full rounded-xl border bg-muted/40 object-contain" />
+      ) : null}
+      <div className="mb-6 whitespace-pre-wrap text-sm leading-relaxed text-pretty">{tl(lesson.body)}</div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={lessonIdx === 0}
+          onClick={() => setLessonIdx((i) => i - 1)}
+          aria-label={tl({ ru: 'Предыдущий урок', kk: 'Алдыңғы сабақ' })}
+        >
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </Button>
+        <Button className="flex-1" variant={lessonDone ? 'secondary' : 'default'} onClick={markDone}>
+          <CheckCircle2 className="size-4" aria-hidden="true" />
+          {lessonDone
+            ? tl({ ru: 'Урок пройден', kk: 'Сабақ өтілді' })
+            : t('completeLesson')}
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={lessonIdx >= lessons.length - 1}
+          onClick={() => {
+            markDone()
+            setLessonIdx((i) => i + 1)
+          }}
+          aria-label={tl({ ru: 'Следующий урок', kk: 'Келесі сабақ' })}
+        >
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+    </Section>
+  )
+}
+
+function topicStats(topic: TheoryTopic, doneIds: Set<string>) {
+  const lessons = topic.content ?? []
+  const total = lessons.length || topic.lessons || 0
+  const done = lessons.filter((l) => doneIds.has(l.id)).length
+  return { total, done }
+}
+
+function Curriculum() {
+  const { me, theory, theoryProgress, t, tl } = useStore()
+  const [openId, setOpenId] = useState<string | null>(null)
+  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const total = theory.reduce((a, b) => a + topicStats(b, doneIds).total, 0) || 1
+  const done = theory.reduce((a, b) => a + topicStats(b, doneIds).done, 0)
+  const openTopic = theory.find((x) => x.id === openId)
+
+  if (openTopic) {
+    return <TheoryDetail topic={openTopic} onBack={() => setOpenId(null)} />
+  }
+
+  return (
+    <Section title={t('curriculum')} action={<span className="text-sm font-semibold text-primary">{Math.round((done / total) * 100)}%</span>}>
+      <ProgressBar value={(done / total) * 100} label={t('curriculum')} className="mb-4" />
+      <ol className="flex flex-col gap-2">
+        {theory.map((topic, idx) => {
+          const stats = topicStats(topic, doneIds)
+          const complete = stats.total > 0 && stats.done >= stats.total
+          return (
+            <li key={topic.id} className="flex items-center gap-3 rounded-xl border p-3">
+              <span
+                className={cn(
+                  'flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold',
+                  complete ? 'bg-success/15 text-success' : 'bg-accent text-primary',
+                )}
+              >
+                {complete ? <CheckCircle2 className="size-5" aria-hidden="true" /> : idx + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug">{tl(topic.title)}</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <ProgressBar value={(stats.done / Math.max(1, stats.total)) * 100} className="h-1.5" label={tl(topic.title)} />
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {stats.done}/{stats.total}
+                  </span>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label={`${t('continueLesson')}: ${tl(topic.title)}`}
+                onClick={() => setOpenId(topic.id)}
+              >
+                <BookOpen className="size-4" aria-hidden="true" />
+              </Button>
+            </li>
+          )
+        })}
+      </ol>
+    </Section>
+  )
+}
+
+function Flashcards() {
+  const { t, tl, learnedSigns, toggleSign, roadSigns } = useStore()
+  const [index, setIndex] = useState(0)
+  const [flipped, setFlipped] = useState(false)
+  const signs = roadSigns.length ? roadSigns : []
+  const sign = signs[index]
+  const go = (d: number) => {
+    setFlipped(false)
+    setIndex((i) => (i + d + signs.length) % signs.length)
+  }
+
+  if (!sign) {
+    return (
+      <Section title={t('roadSigns')}>
+        <p className="text-sm text-muted-foreground">
+          {tl({ ru: 'Дорожные знаки ещё не добавлены администратором.', kk: 'Жол белгілері әлі әкімші тарапынан қосылмаған.' })}
+        </p>
+      </Section>
+    )
+  }
+
+  return (
+    <Section
+      title={t('roadSigns')}
+      action={
+        <span className="text-xs font-medium text-muted-foreground">
+          {t('learned')}: {learnedSigns.length}/{signs.length}
+        </span>
+      }
+    >
+      <button
+        type="button"
+        onClick={() => setFlipped((f) => !f)}
+        aria-label={t('showMeaning')}
+        className="group w-full [perspective:1000px]"
+      >
+        <div
+          className={cn(
+            'relative h-64 w-full transition-transform duration-500 [transform-style:preserve-3d]',
+            flipped && '[transform:rotateY(180deg)]',
+          )}
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border bg-muted/50 [backface-visibility:hidden]">
+            {sign.imageUrl ? (
+              <img src={sign.imageUrl} alt={sign.code} className="max-h-40 max-w-full object-contain" />
+            ) : (
+              <RoadSignGraphic sign={sign} />
+            )}
+            <span className="rounded-full bg-card px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+              {sign.code}
+            </span>
+            <span className="text-xs text-muted-foreground">{t('flashcardHint')}</span>
+          </div>
+          <div className="absolute inset-0 flex flex-col justify-center gap-2 rounded-2xl bg-primary p-5 text-left text-primary-foreground [backface-visibility:hidden] [transform:rotateY(180deg)]">
+            <span className="text-xs font-semibold opacity-80">{sign.code}</span>
+            <span className="text-lg font-bold leading-snug">{tl(sign.name)}</span>
+            <span className="text-sm leading-relaxed opacity-90">{tl(sign.meaning)}</span>
+          </div>
+        </div>
+      </button>
+
+      <div className="mt-3 flex items-center gap-2">
+        <Button variant="outline" size="icon" onClick={() => go(-1)} aria-label="Назад">
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={() => {
+            toggleSign(sign.id, false)
+            go(1)
+          }}
+        >
+          <RotateCcw className="size-4" aria-hidden="true" />
+          {t('dontKnow')}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={() => {
+            toggleSign(sign.id, true)
+            go(1)
+          }}
+        >
+          <ThumbsUp className="size-4" aria-hidden="true" />
+          {t('know')}
+        </Button>
+        <Button variant="outline" size="icon" onClick={() => go(1)} aria-label="Вперёд">
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+      <div className="mt-3 flex justify-center gap-1.5" aria-hidden="true">
+        {signs.map((s, i) => (
+          <span
+            key={s.id}
+            className={cn(
+              'size-1.5 rounded-full',
+              i === index ? 'bg-primary' : learnedSigns.includes(s.id) ? 'bg-success' : 'bg-border',
+            )}
+          />
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+export function TabTheory() {
+  return (
+    <div className="flex flex-col gap-4">
+      <Flashcards />
+      <Curriculum />
+    </div>
+  )
+}
