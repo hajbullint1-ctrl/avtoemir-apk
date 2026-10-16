@@ -1,0 +1,1 @@
+$(cat /tmp/avtoemir/sync.ts)
