@@ -24,6 +24,7 @@ import {
 } from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
 import { isSupabaseConfigured, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
+import { syncCertificateWidget } from './certificate-widget'
 import {
   fetchProfiles,
   fetchTheoryProgress,
@@ -471,7 +472,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [ready, session, login, register, logout, lang, students, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, updateStudent, pushNotice])
   // replyAsAdmin / sendMessage / broadcastNotice are stable enough via setState closures
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  return (
+    <StoreContext.Provider value={value}>
+      <CertificateWidgetBridge />
+      {children}
+    </StoreContext.Provider>
+  )
+}
+
+function CertificateWidgetBridge() {
+  const { ready, session, me, school } = useStore()
+  useEffect(() => {
+    if (!ready) return
+    void syncCertificateWidget({
+      loggedIn: Boolean(session),
+      fullName: me.name,
+      schoolName: school.name || 'AvtoEmir',
+      accountId: session?.accountId ?? me.id,
+      date: me.readyDate || me.submittedAt || '',
+      status: me.status,
+    })
+  }, [ready, session, me.id, me.name, me.status, me.readyDate, me.submittedAt, school.name])
+  return null
 }
 
 export function useStore() {

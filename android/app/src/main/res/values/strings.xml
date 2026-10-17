@@ -4,4 +4,8 @@
     <string name="title_activity_main">AvtoEmir</string>
     <string name="package_name">com.avtoemir.app</string>
     <string name="custom_url_scheme">com.avtoemir.app</string>
+    <string name="widget_certificate_label">Сертификат</string>
+    <string name="widget_certificate_description">Карточка сертификата ученика AvtoEmir</string>
+    <string name="widget_certificate_kicker">Сертификат</string>
+    <string name="widget_certificate_signed_out">Войдите в приложение</string>
 </resources>
