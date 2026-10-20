@@ -12,13 +12,13 @@ import { fetchUnresolvedMistakeIds, recordMistake, resolveMistake } from '@/lib/
 export const EXAM_QUESTION_COUNT = 40
 
 export function pickRandomQuestions(pool: Question[], count: number): Question[] {
-  if (pool.length <= count) return [...pool]
+  if (!pool.length) return []
   const arr = [...pool]
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[arr[i], arr[j]] = [arr[j], arr[i]]
   }
-  return arr.slice(0, count)
+  return arr.slice(0, Math.min(count, arr.length))
 }
 
 type ExamMode = 'practice' | 'mistakes'
@@ -54,7 +54,7 @@ function Exam({
   }
 
   if (finished) {
-    const pct = Math.round((score / total) * 100)
+    const pct = total ? Math.round((score / total) * 100) : 0
     const passed = pct >= 80
     return (
       <Section className="text-center">
@@ -80,7 +80,18 @@ function Exam({
   }
 
   const answered = picked !== null
-  const isLast = index === total - 1
+  const isLast = total > 0 && index === total - 1
+
+  const goNext = () => {
+    if (!answered) return
+    if (isLast) {
+      if (mode === 'practice') addResult(score, total)
+      setFinished(true)
+      return
+    }
+    setIndex((i) => i + 1)
+    setPicked(null)
+  }
 
   return (
     <Section>
@@ -110,6 +121,7 @@ function Exam({
               aria-checked={isPicked}
               disabled={answered}
               onClick={() => {
+                if (answered) return
                 setPicked(i)
                 if (isCorrect) {
                   setScore((s) => s + 1)
@@ -151,19 +163,7 @@ function Exam({
         </div>
       )}
 
-      <Button
-        className="mt-4 h-11 w-full"
-        disabled={!answered}
-        onClick={() => {
-          if (isLast) {
-            if (mode === 'practice') addResult(score, total)
-            setFinished(true)
-          } else {
-            setIndex((i) => i + 1)
-            setPicked(null)
-          }
-        }}
-      >
+      <Button className="mt-4 h-11 w-full" disabled={!answered} onClick={goNext}>
         {isLast ? t('finish') : t('next')}
       </Button>
     </Section>
@@ -233,6 +233,9 @@ export function TabTests() {
   const [key, setKey] = useState(0)
   const [mistakeCount, setMistakeCount] = useState(0)
 
+  const bankSize = questions.length
+  const examSize = Math.min(EXAM_QUESTION_COUNT, bankSize)
+
   const refreshMistakes = () => {
     void fetchUnresolvedMistakeIds(me.id).then((ids) => setMistakeCount(ids.length))
   }
@@ -242,8 +245,10 @@ export function TabTests() {
   }, [me.id, running])
 
   const startPractice = () => {
+    const pool = pickRandomQuestions(questions, EXAM_QUESTION_COUNT)
+    if (!pool.length) return
     setMode('practice')
-    setExamItems(pickRandomQuestions(questions, EXAM_QUESTION_COUNT))
+    setExamItems(pool)
     setKey((k) => k + 1)
     setRunning(true)
   }
@@ -251,6 +256,10 @@ export function TabTests() {
   const startMistakes = async () => {
     const ids = await fetchUnresolvedMistakeIds(me.id)
     const pool = questions.filter((q) => ids.includes(q.id))
+    if (!pool.length) {
+      setMistakeCount(0)
+      return
+    }
     setMode('mistakes')
     setExamItems(pool)
     setKey((k) => k + 1)
@@ -276,12 +285,12 @@ export function TabTests() {
             <ClipboardList className="mb-3 size-8" aria-hidden="true" />
             <h1 className="text-lg font-bold">{t('practiceExam')}</h1>
             <p className="mt-1 text-sm opacity-90">
-              {EXAM_QUESTION_COUNT} {t('examInfo')}
+              {examSize > 0 ? examSize : EXAM_QUESTION_COUNT} {t('examInfo')}
             </p>
             <Button
               variant="secondary"
               className="mt-4 h-11 w-full"
-              disabled={questions.length === 0}
+              disabled={bankSize === 0}
               onClick={startPractice}
             >
               <Play className="size-4" aria-hidden="true" />
