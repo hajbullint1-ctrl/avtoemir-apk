@@ -1,17 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { Award, CheckCircle2, ClipboardList, Play, RotateCcw, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Award, CheckCircle2, ClipboardList, Play, RotateCcw, XCircle, BookX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
 import type { Question } from '@/lib/data'
 import { cn } from '@/lib/utils'
+import { fetchUnresolvedMistakeIds, recordMistake, resolveMistake } from '@/lib/mistakes'
 
-/** How many questions in one practice exam */
 export const EXAM_QUESTION_COUNT = 40
 
-/** Random sample of N unique questions (Fisher–Yates) */
 export function pickRandomQuestions(pool: Question[], count: number): Question[] {
   if (pool.length <= count) return [...pool]
   const arr = [...pool]
@@ -22,8 +21,18 @@ export function pickRandomQuestions(pool: Question[], count: number): Question[]
   return arr.slice(0, count)
 }
 
-function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
-  const { t, tl, addResult } = useStore()
+type ExamMode = 'practice' | 'mistakes'
+
+function Exam({
+  items,
+  mode,
+  onDone,
+}: {
+  items: Question[]
+  mode: ExamMode
+  onDone: () => void
+}) {
+  const { me, t, tl, addResult } = useStore()
   const [index, setIndex] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [score, setScore] = useState(0)
@@ -34,7 +43,9 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
   if (!q || total === 0) {
     return (
       <Section>
-        <p className="text-sm text-muted-foreground">{t('noHistory')}</p>
+        <p className="text-sm text-muted-foreground">
+          {mode === 'mistakes' ? t('mistakesEmpty') : t('noHistory')}
+        </p>
         <Button className="mt-4 w-full" onClick={onDone}>
           {t('retry')}
         </Button>
@@ -100,7 +111,12 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
               disabled={answered}
               onClick={() => {
                 setPicked(i)
-                if (isCorrect) setScore((s) => s + 1)
+                if (isCorrect) {
+                  setScore((s) => s + 1)
+                  if (mode === 'mistakes') void resolveMistake(me.id, q.id)
+                } else {
+                  void recordMistake(me.id, q.id)
+                }
               }}
               className={cn(
                 'flex items-center gap-3 rounded-xl border-2 p-3 text-left text-sm transition-colors',
@@ -140,7 +156,7 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
         disabled={!answered}
         onClick={() => {
           if (isLast) {
-            addResult(score, total)
+            if (mode === 'practice') addResult(score, total)
             setFinished(true)
           } else {
             setIndex((i) => i + 1)
@@ -210,13 +226,33 @@ function History() {
 }
 
 export function TabTests() {
-  const { t, questions } = useStore()
+  const { t, questions, me } = useStore()
   const [running, setRunning] = useState(false)
+  const [mode, setMode] = useState<ExamMode>('practice')
   const [examItems, setExamItems] = useState<Question[]>([])
   const [key, setKey] = useState(0)
+  const [mistakeCount, setMistakeCount] = useState(0)
 
-  const startExam = () => {
+  const refreshMistakes = () => {
+    void fetchUnresolvedMistakeIds(me.id).then((ids) => setMistakeCount(ids.length))
+  }
+
+  useEffect(() => {
+    refreshMistakes()
+  }, [me.id, running])
+
+  const startPractice = () => {
+    setMode('practice')
     setExamItems(pickRandomQuestions(questions, EXAM_QUESTION_COUNT))
+    setKey((k) => k + 1)
+    setRunning(true)
+  }
+
+  const startMistakes = async () => {
+    const ids = await fetchUnresolvedMistakeIds(me.id)
+    const pool = questions.filter((q) => ids.includes(q.id))
+    setMode('mistakes')
+    setExamItems(pool)
     setKey((k) => k + 1)
     setRunning(true)
   }
@@ -227,28 +263,49 @@ export function TabTests() {
         <Exam
           key={key}
           items={examItems}
+          mode={mode}
           onDone={() => {
             setRunning(false)
             setExamItems([])
+            refreshMistakes()
           }}
         />
       ) : (
-        <section className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-md">
-          <ClipboardList className="mb-3 size-8" aria-hidden="true" />
-          <h1 className="text-lg font-bold">{t('practiceExam')}</h1>
-          <p className="mt-1 text-sm opacity-90">
-            {EXAM_QUESTION_COUNT} {t('examInfo')}
-          </p>
-          <Button
-            variant="secondary"
-            className="mt-4 h-11 w-full"
-            disabled={questions.length === 0}
-            onClick={startExam}
-          >
-            <Play className="size-4" aria-hidden="true" />
-            {t('startExam')}
-          </Button>
-        </section>
+        <>
+          <section className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-md">
+            <ClipboardList className="mb-3 size-8" aria-hidden="true" />
+            <h1 className="text-lg font-bold">{t('practiceExam')}</h1>
+            <p className="mt-1 text-sm opacity-90">
+              {EXAM_QUESTION_COUNT} {t('examInfo')}
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-4 h-11 w-full"
+              disabled={questions.length === 0}
+              onClick={startPractice}
+            >
+              <Play className="size-4" aria-hidden="true" />
+              {t('startExam')}
+            </Button>
+          </section>
+
+          <section className="rounded-2xl border border-primary/30 bg-accent/40 p-5">
+            <BookX className="mb-3 size-8 text-primary" aria-hidden="true" />
+            <h2 className="text-lg font-bold">{t('workOnMistakes')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {mistakeCount > 0 ? `${mistakeCount} ${t('mistakesInfo')}` : t('mistakesEmpty')}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4 h-11 w-full"
+              disabled={mistakeCount === 0}
+              onClick={() => void startMistakes()}
+            >
+              <BookX className="size-4" aria-hidden="true" />
+              {t('workOnMistakes')}
+            </Button>
+          </section>
+        </>
       )}
       <History />
     </div>
