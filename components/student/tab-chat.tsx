@@ -8,7 +8,7 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 function Chat() {
-  const { t, me, instructors, messages, sendMessage } = useStore()
+  const { t, me, session, instructors, messages, sendMessage } = useStore()
   const threads = [{ id: 'admin', name: t('administration'), sub: 'AvtoEmir' }].concat(
     instructors.map((i) => ({
       id: i.id,
@@ -19,11 +19,11 @@ function Chat() {
   const [thread, setThread] = useState('admin')
   const [text, setText] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  const ownIds = new Set([me.id, session?.accountId].filter(Boolean))
   const current = messages.filter((m) => {
     if (m.thread !== thread) return false
-    // Messages sent before profiles were attached stay visible; new ones belong to one student.
     if (!m.studentId) return true
-    return m.studentId === me.id
+    return ownIds.has(m.studentId)
   })
   const active = threads.find((x) => x.id === thread) ?? threads[0]
 

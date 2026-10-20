@@ -23,7 +23,7 @@ import {
   type Session,
 } from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
-import { isSupabaseConfigured, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
+import { isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
 import { fetchPresence, newerStamp, touchPresence } from './presence'
 import { syncCertificateWidget } from './certificate-widget'
 import {
@@ -66,8 +66,13 @@ function mergeMessageLists(local: Message[], remote: Message[], dropped: Set<str
     out.push(m)
   }
   for (const m of local) {
-    if (!m?.id || dropped.has(m.id) || seen.has(m.id)) continue
+    if (!m?.id || dropped.has(m.id)) continue
     if (SEED_MESSAGE_IDS.has(m.id) && !remoteIds.has(m.id)) continue
+    if (seen.has(m.id)) {
+      const index = out.findIndex((item) => item.id === m.id)
+      if (index >= 0) out[index] = m
+      continue
+    }
     seen.add(m.id)
     out.push(m)
   }
@@ -204,6 +209,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [droppedIds, setDroppedIds] = useState<string[]>([])
   const droppedRef = useRef<Set<string>>(new Set())
   const messagesRef = useRef<Message[]>(seedMessages)
+  const pendingMessagesRef = useRef(false)
+  const publishRevisionRef = useRef(0)
+  const publishChainRef = useRef(Promise.resolve())
+  const publishRef = useRef<() => void>(() => {})
 
   const rememberDropped = useCallback((ids: string[]) => {
     let changed = false
@@ -224,21 +233,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void saveSharedKey('droppedMessageIds', list)
   }, [])
 
-  const publishMessages = useCallback((next: Message[]) => {
-    const clean = next.filter((m) => m?.id && !droppedRef.current.has(m.id))
-    messagesRef.current = clean
-    void saveSharedKey('messages', clean)
-  }, [])
+  const publishMessages = useCallback(() => {
+    pendingMessagesRef.current = true
+    const revisionAtStart = ++publishRevisionRef.current
+    publishChainRef.current = publishChainRef.current
+      .then(async () => {
+        const revision = revisionAtStart
+        const bundle = await loadMessagesBundle()
+        // A failed read must not overwrite everyone else's messages with a partial list.
+        if (!bundle) return
+        if (bundle.droppedMessageIds.length) rememberDropped(bundle.droppedMessageIds)
+        const local = messagesRef.current.filter((m) => m?.id && !droppedRef.current.has(m.id))
+        let merged = mergeMessageLists(local, bundle.messages, droppedRef.current)
+        merged = mergeMessageLists(messagesRef.current, merged, droppedRef.current)
+        const ok = await saveSharedKey('messages', merged)
+        if (!ok) return
+        if (publishRevisionRef.current === revision) pendingMessagesRef.current = false
+        messagesRef.current = mergeMessageLists(messagesRef.current, merged, droppedRef.current)
+        setMessages((prev) => (sameMessages(prev, messagesRef.current) ? prev : messagesRef.current))
+      })
+      .catch((error) => {
+        console.warn('[messages]', error)
+      })
+  }, [rememberDropped])
+  publishRef.current = publishMessages
 
   const absorbMessages = useCallback((remote: Message[] | undefined, remoteDropped?: string[]) => {
     if (remoteDropped?.length) rememberDropped(remoteDropped)
     if (!remote) return
+    const remoteIds = new Set(remote.map((m) => m?.id).filter(Boolean))
+    const missingLocal = messagesRef.current.some(
+      (m) => m?.id && !droppedRef.current.has(m.id) && !SEED_MESSAGE_IDS.has(m.id) && !remoteIds.has(m.id),
+    )
+    if (missingLocal) pendingMessagesRef.current = true
     setMessages((local) => {
       const merged = mergeMessageLists(local, remote, droppedRef.current)
       if (sameMessages(local, merged)) return local
       messagesRef.current = merged
       return merged
     })
+    if (missingLocal) queueMicrotask(() => publishRef.current())
   }, [rememberDropped])
 
   useEffect(() => {
@@ -421,7 +455,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         theory,
         questions,
         reviews,
-        messages,
         bookings,
         accounts: listAccounts(),
         recovery: listPasswordRecoveryRequests(),
@@ -434,7 +467,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     }, 800)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns, droppedIds])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns, droppedIds])
 
   // Periodic pull from cloud so admin changes appear on student devices
   useEffect(() => {
@@ -484,6 +517,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const id = setInterval(pull, 8000)
     return () => clearInterval(id)
   }, [ready])
+
+  // Chat-only sync: fast enough that the other side sees a message within a couple of seconds,
+  // and a failed send is retried without rewriting the rest of the database.
+  useEffect(() => {
+    if (!ready || !isSupabaseConfigured) return
+    const tick = () => {
+      if (pendingMessagesRef.current) {
+        publishRef.current()
+        return
+      }
+      void loadMessagesBundle().then((bundle) => {
+        if (bundle) absorbMessages(bundle.messages, bundle.droppedMessageIds)
+      })
+    }
+    const id = setInterval(tick, 2000)
+    return () => clearInterval(id)
+  }, [ready, absorbMessages])
+
+  // Messages sent before the account id existed were tagged "me" and then vanished from the thread.
+  useEffect(() => {
+    if (!ready || !session?.accountId) return
+    if (!messagesRef.current.some((m) => m.studentId === 'me')) return
+    messagesRef.current = messagesRef.current.map((m) =>
+      m.studentId === 'me' ? { ...m, studentId: session.accountId, authorName: m.authorName || session.fullName } : m,
+    )
+    setMessages(messagesRef.current)
+    publishRef.current()
+  }, [ready, session?.accountId, session?.fullName, messages])
 
   const updateStudent = useCallback((id: string, patch: (s: Student) => Student) => {
     setStudents((list) => list.map((s) => (s.id === id ? patch(s) : s)))
@@ -615,41 +676,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addReview: (r) => setReviews((list) => [{ ...r, id: uid(), date: nowStamp().slice(0, 10), visible: true }, ...list]),
       messages,
       sendMessage: (thread, text) => {
-        const msg: Message = { id: uid(), thread, fromMe: true, text, time: nowTime(), studentId: me.id, authorName: me.name }
-        setMessages((list) => {
-          const next = [...list, msg]
-          messagesRef.current = next
-          queueMicrotask(() => publishMessages(messagesRef.current))
-          return next
-        })
+        const msg: Message = { id: uid(), thread, fromMe: true, text, time: nowTime(), studentId: session?.accountId || me.id, authorName: me.name }
+        messagesRef.current = [...messagesRef.current, msg]
+        setMessages(messagesRef.current)
+        publishMessages()
       },
       replyAsAdmin: (thread, text, meta) => {
         const msg: Message = { id: uid(), thread, fromMe: false, text, time: nowTime(), studentId: meta?.studentId, authorName: meta?.authorName || 'AvtoEmir' }
-        setMessages((list) => {
-          const next = [...list, msg]
-          messagesRef.current = next
-          queueMicrotask(() => publishMessages(messagesRef.current))
-          return next
-        })
+        messagesRef.current = [...messagesRef.current, msg]
+        setMessages(messagesRef.current)
+        publishMessages()
       },
       deleteMessage: (id) => {
         rememberDropped([id])
-        setMessages((list) => {
-          const next = list.filter((m) => m.id !== id)
-          messagesRef.current = next
-          queueMicrotask(() => publishMessages(next))
-          return next
-        })
+        messagesRef.current = messagesRef.current.filter((m) => m.id !== id)
+        setMessages(messagesRef.current)
+        publishMessages()
       },
       deleteChat: (thread, studentId) => {
-        setMessages((list) => {
-          const removed = list.filter((m) => m.thread === thread && (studentId == null || m.studentId === studentId)).map((m) => m.id)
-          rememberDropped(removed)
-          const next = list.filter((m) => !removed.includes(m.id))
-          messagesRef.current = next
-          queueMicrotask(() => publishMessages(next))
-          return next
-        })
+        const removed = messagesRef.current.filter((m) => m.thread === thread && (studentId == null || m.studentId === studentId)).map((m) => m.id)
+        rememberDropped(removed)
+        messagesRef.current = messagesRef.current.filter((m) => !removed.includes(m.id))
+        setMessages(messagesRef.current)
+        publishMessages()
       },
       notices, markNoticesRead: () => setNotices((list) => list.map((n) => ({ ...n, read: true }))),
       broadcastNotice: (title, body) => pushNotice({ kind: 'announce', title, body }),

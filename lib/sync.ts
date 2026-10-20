@@ -153,6 +153,31 @@ export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
   }
 }
 
+/** Messages only — used so a chat send does not wait on the rest of the app state. */
+export async function loadMessagesBundle(): Promise<{ messages: Message[]; droppedMessageIds: string[] } | null> {
+  const sb = getSupabase()
+  if (!sb) return { messages: [], droppedMessageIds: [] }
+  try {
+    const { data, error } = await sb.from('app_state').select('key, data').in('key', ['messages', 'droppedMessageIds'])
+    if (error) {
+      console.warn('[sync] messages load:', error.message)
+      return null
+    }
+    let messages: Message[] = []
+    let droppedMessageIds: string[] = []
+    for (const row of data ?? []) {
+      if (row.key === 'messages' && Array.isArray(row.data)) messages = row.data as Message[]
+      if (row.key === 'droppedMessageIds' && Array.isArray(row.data)) {
+        droppedMessageIds = row.data.filter((id: unknown) => typeof id === 'string')
+      }
+    }
+    return { messages, droppedMessageIds }
+  } catch (e) {
+    console.warn('[sync] messages load exception:', e)
+    return null
+  }
+}
+
 /** Upsert one shared key. No-op if Supabase is not configured. */
 export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
   const sb = getSupabase()
