@@ -5,45 +5,18 @@ import { Award, CheckCircle2, ClipboardList, Play, RotateCcw, XCircle } from 'lu
 import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
-import type { Question } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
-/** How many questions in one practice exam */
-export const EXAM_QUESTION_COUNT = 40
-
-/** Random sample of N unique questions (Fisher–Yates) */
-export function pickRandomQuestions(pool: Question[], count: number): Question[] {
-  if (pool.length <= count) return [...pool]
-  const arr = [...pool]
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr.slice(0, count)
-}
-
-function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
-  const { t, tl, addResult } = useStore()
+function Exam({ onDone }: { onDone: () => void }) {
+  const { questions, t, tl, addResult } = useStore()
   const [index, setIndex] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [score, setScore] = useState(0)
   const [finished, setFinished] = useState(false)
-  const total = items.length
-  const q = items[index]
-
-  if (!q || total === 0) {
-    return (
-      <Section>
-        <p className="text-sm text-muted-foreground">{t('noHistory')}</p>
-        <Button className="mt-4 w-full" onClick={onDone}>
-          {t('retry')}
-        </Button>
-      </Section>
-    )
-  }
+  const q = questions[index]
 
   if (finished) {
-    const pct = Math.round((score / total) * 100)
+    const pct = Math.round((score / questions.length) * 100)
     const passed = pct >= 80
     return (
       <Section className="text-center">
@@ -58,7 +31,7 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
         <h2 className="text-lg font-bold">{passed ? t('passed') : t('failed')}</h2>
         <p className="mt-1 text-3xl font-extrabold text-primary">{pct}%</p>
         <p className="text-sm text-muted-foreground">
-          {score} {t('of')} {total}
+          {score} {t('of')} {questions.length}
         </p>
         <Button className="mt-4 w-full" onClick={onDone}>
           <RotateCcw className="size-4" aria-hidden="true" />
@@ -69,17 +42,17 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
   }
 
   const answered = picked !== null
-  const isLast = index === total - 1
+  const isLast = index === questions.length - 1
 
   return (
     <Section>
       <div className="mb-2 flex items-center justify-between text-xs font-medium text-muted-foreground">
         <span>
-          {t('question')} {index + 1} {t('of')} {total}
+          {t('question')} {index + 1} {t('of')} {questions.length}
         </span>
         <span className="tabular-nums">{score} ✓</span>
       </div>
-      <ProgressBar value={((index + (answered ? 1 : 0)) / total) * 100} className="mb-4" label={t('question')} />
+      <ProgressBar value={((index + (answered ? 1 : 0)) / questions.length) * 100} className="mb-4" label={t('question')} />
       <h2 className="mb-4 text-base font-semibold leading-snug text-pretty">{tl(q.q)}</h2>
       {q.imageUrl ? (
         <div className="mb-4 overflow-hidden rounded-xl border bg-muted/30">
@@ -140,7 +113,7 @@ function Exam({ items, onDone }: { items: Question[]; onDone: () => void }) {
         disabled={!answered}
         onClick={() => {
           if (isLast) {
-            addResult(score, total)
+            addResult(score, questions.length)
             setFinished(true)
           } else {
             setIndex((i) => i + 1)
@@ -212,24 +185,15 @@ function History() {
 export function TabTests() {
   const { t, questions } = useStore()
   const [running, setRunning] = useState(false)
-  const [examItems, setExamItems] = useState<Question[]>([])
   const [key, setKey] = useState(0)
-
-  const startExam = () => {
-    setExamItems(pickRandomQuestions(questions, EXAM_QUESTION_COUNT))
-    setKey((k) => k + 1)
-    setRunning(true)
-  }
 
   return (
     <div className="flex flex-col gap-4">
       {running ? (
         <Exam
           key={key}
-          items={examItems}
           onDone={() => {
-            setRunning(false)
-            setExamItems([])
+            setKey((k) => k + 1)
           }}
         />
       ) : (
@@ -237,14 +201,9 @@ export function TabTests() {
           <ClipboardList className="mb-3 size-8" aria-hidden="true" />
           <h1 className="text-lg font-bold">{t('practiceExam')}</h1>
           <p className="mt-1 text-sm opacity-90">
-            {EXAM_QUESTION_COUNT} {t('examInfo')}
+            {questions.length} {t('examInfo')}
           </p>
-          <Button
-            variant="secondary"
-            className="mt-4 h-11 w-full"
-            disabled={questions.length === 0}
-            onClick={startExam}
-          >
+          <Button variant="secondary" className="mt-4 h-11 w-full" onClick={() => setRunning(true)}>
             <Play className="size-4" aria-hidden="true" />
             {t('startExam')}
           </Button>
