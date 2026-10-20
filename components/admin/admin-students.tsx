@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
+import { OnlineBadge } from '@/components/shared/online-badge'
 import { DOC_KEYS, type DocFile, type DocKey, type DocStatus, type Student } from '@/lib/data'
 import {
   adminResetPassword,
@@ -257,7 +258,7 @@ function ProgressPanel({ student }: { student: Student }) {
 }
 
 function StudentDetail({ student, account }: { student: Student; account: Account | null }) {
-  const { tl, approveStudent, rejectStudent, resetStudentDocs } = useStore()
+  const { tl, approveStudent, rejectStudent, resetStudentDocs, presence } = useStore()
   const [preview, setPreview] = useState<DocKey | null>(null)
   const [date, setDate] = useState(student.readyDate ?? '')
   const [zipping, setZipping] = useState(false)
@@ -324,7 +325,14 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
               .join('')}
           </span>
           <div>
-            <h2 className="text-lg font-bold">{student.name}</h2>
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-bold">
+              {student.name}
+              <OnlineBadge
+                lastSeen={presence[student.id]}
+                onlineLabel={tl({ ru: 'онлайн', kk: 'онлайн' })}
+                offlineLabel={tl({ ru: 'не в сети', kk: 'желіде емес' })}
+              />
+            </h2>
             <p className="flex items-center gap-1 text-sm text-muted-foreground">
               <Phone className="size-3.5" aria-hidden="true" />
               {student.phone}
@@ -524,7 +532,7 @@ function RecoveryBanner({
 }
 
 export function AdminStudents() {
-  const { students, tl } = useStore()
+  const { students, tl, presence } = useStore()
   const [filter, setFilter] = useState<DocStatus | 'all'>('all')
   const [tick, setTick] = useState(0)
   const accounts = useMemo(() => listAccounts(), [tick, students])
@@ -623,9 +631,17 @@ export function AdminStudents() {
                       .join('')}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
-                      {s.name}
-                      {s.id === 'me' && <span className="ml-1 text-xs font-normal text-primary">(demo)</span>}
+                    <span className="flex items-center gap-2 truncate text-sm font-semibold">
+                      <span className="truncate">
+                        {s.name}
+                        {s.id === 'me' && <span className="ml-1 text-xs font-normal text-primary">(demo)</span>}
+                      </span>
+                      <OnlineBadge
+                        lastSeen={presence[s.id]}
+                        onlineLabel={tl({ ru: 'онлайн', kk: 'онлайн' })}
+                        offlineLabel={tl({ ru: 'не в сети', kk: 'желіде емес' })}
+                        compact
+                      />
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">{s.phone}</span>
                     <span className="text-xs text-muted-foreground">

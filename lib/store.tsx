@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import { dict, type DictKey, type L, type Lang } from './i18n'
 import {
@@ -24,6 +24,7 @@ import {
 } from './auth'
 import { loadPersisted, onPersistedChange, savePersisted } from './persist'
 import { isSupabaseConfigured, loadSharedFromCloud, saveSharedKey, saveSharedToCloud } from './sync'
+import { fetchPresence, newerStamp, touchPresence } from './presence'
 import { syncCertificateWidget } from './certificate-widget'
 import {
   fetchProfiles,
@@ -32,6 +33,46 @@ import {
   upsertTheoryProgress,
   type ProfileRow,
 } from './cloud-features'
+
+const DROPPED_KEY = 'avtoemir.droppedMessages'
+const SEED_MESSAGE_IDS = new Set(['m1'])
+
+function loadDropped(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = JSON.parse(localStorage.getItem(DROPPED_KEY) || '[]')
+    return Array.isArray(raw) ? raw.filter((id) => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function sameMessages(a: Message[], b: Message[]) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]?.id !== b[i]?.id || a[i]?.text !== b[i]?.text) return false
+  }
+  return true
+}
+
+/** Keep local messages the cloud has not seen yet, and drop tombstoned ones. */
+function mergeMessageLists(local: Message[], remote: Message[], dropped: Set<string>): Message[] {
+  const remoteIds = new Set(remote.map((m) => m?.id).filter(Boolean))
+  const seen = new Set<string>()
+  const out: Message[] = []
+  for (const m of remote) {
+    if (!m?.id || dropped.has(m.id) || seen.has(m.id)) continue
+    seen.add(m.id)
+    out.push(m)
+  }
+  for (const m of local) {
+    if (!m?.id || dropped.has(m.id) || seen.has(m.id)) continue
+    if (SEED_MESSAGE_IDS.has(m.id) && !remoteIds.has(m.id)) continue
+    seen.add(m.id)
+    out.push(m)
+  }
+  return out
+}
 
 function mergeProfiles(local: ProfileRow[], remote: ProfileRow[]): ProfileRow[] {
   const map = new Map(local.map((p) => [p.id, p]))
@@ -127,6 +168,8 @@ type Store = {
   toggleSign: (id: string, known: boolean) => void
   roadSigns: RoadSign[]
   setRoadSigns: (s: RoadSign[]) => void
+  /** Last heartbeat per student id. Online if younger than ~50s. */
+  presence: Record<string, string>
 }
 
 const StoreContext = createContext<Store | null>(null)
@@ -157,9 +200,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [roadSigns, setRoadSigns] = useState<RoadSign[]>(seedRoadSigns)
   const [profiles, setProfiles] = useState<ProfileRow[]>([])
   const [theoryProgress, setTheoryProgress] = useState<Record<string, string[]>>({})
+  const [presence, setPresence] = useState<Record<string, string>>({})
+  const [droppedIds, setDroppedIds] = useState<string[]>([])
+  const droppedRef = useRef<Set<string>>(new Set())
+  const messagesRef = useRef<Message[]>(seedMessages)
+
+  const rememberDropped = useCallback((ids: string[]) => {
+    let changed = false
+    for (const id of ids) {
+      if (!id || droppedRef.current.has(id)) continue
+      droppedRef.current.add(id)
+      changed = true
+    }
+    if (!changed) return
+    const list = [...droppedRef.current].slice(-1000)
+    droppedRef.current = new Set(list)
+    setDroppedIds(list)
+    try {
+      localStorage.setItem(DROPPED_KEY, JSON.stringify(list))
+    } catch {
+      /* ignore quota */
+    }
+    void saveSharedKey('droppedMessageIds', list)
+  }, [])
+
+  const publishMessages = useCallback((next: Message[]) => {
+    const clean = next.filter((m) => m?.id && !droppedRef.current.has(m.id))
+    messagesRef.current = clean
+    void saveSharedKey('messages', clean)
+  }, [])
+
+  const absorbMessages = useCallback((remote: Message[] | undefined, remoteDropped?: string[]) => {
+    if (remoteDropped?.length) rememberDropped(remoteDropped)
+    if (!remote) return
+    setMessages((local) => {
+      const merged = mergeMessageLists(local, remote, droppedRef.current)
+      if (sameMessages(local, merged)) return local
+      messagesRef.current = merged
+      return merged
+    })
+  }, [rememberDropped])
 
   useEffect(() => {
     let cancelled = false
+    const storedDropped = loadDropped()
+    if (storedDropped.length) {
+      droppedRef.current = new Set(storedDropped)
+      setDroppedIds(storedDropped)
+    }
     setSession(loadSession())
     const p = loadPersisted()
     if (p) {
@@ -175,7 +263,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })),
         )
       if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
-      if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
+      if (Array.isArray(p.messages)) {
+        const kept = (p.messages as Message[]).filter((m) => m?.id && !droppedRef.current.has(m.id))
+        messagesRef.current = kept
+        setMessages(kept)
+      }
       if (Array.isArray(p.notices)) setNotices(p.notices as Notice[])
       if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
       if (Array.isArray(p.results)) setResults(p.results as TestResult[])
@@ -219,7 +311,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
       if (cloud?.questions?.length) setQuestions(cloud.questions)
       if (cloud?.reviews) setReviews(cloud.reviews)
-      if (cloud?.messages) setMessages(cloud.messages)
+      if (cloud?.messages) absorbMessages(cloud.messages, cloud.droppedMessageIds)
+      if (cloud?.presence) setPresence((prev) => ({ ...prev, ...cloud.presence }))
       if (cloud?.bookings) setBookings(cloud.bookings)
       if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts)
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
@@ -232,6 +325,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cancelled && tableProfiles.length) setProfiles((prev) => mergeProfiles(prev, tableProfiles))
       const progressRows = await fetchTheoryProgress()
       if (!cancelled && progressRows.length) setTheoryProgress((prev) => mergeProgress(prev, progressRows))
+      const live = await fetchPresence()
+      if (!cancelled && Object.keys(live).length) {
+        setPresence((prev) => {
+          const next = { ...prev }
+          for (const [id, stamp] of Object.entries(live)) next[id] = newerStamp(prev[id], stamp)
+          return next
+        })
+      }
       const sess = loadSession()
       if (sess?.accountId && sess.fullName) {
         void upsertProfile({ id: sess.accountId, full_name: sess.fullName, phone: sess.phone })
@@ -261,7 +362,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })),
         )
       if (Array.isArray(data.reviews)) setReviews(data.reviews as Review[])
-      if (Array.isArray(data.messages)) setMessages(data.messages as Message[])
+      if (Array.isArray(data.messages)) absorbMessages(data.messages as Message[])
       if (Array.isArray(data.notices)) setNotices(data.notices as Notice[])
       if (Array.isArray(data.bookings)) setBookings(data.bookings as Booking[])
       if (Array.isArray(data.results)) setResults(data.results as TestResult[])
@@ -329,10 +430,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         profiles,
         theoryProgress,
         roadSigns,
+        droppedMessageIds: droppedIds,
       })
     }, 800)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, messages, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns, droppedIds])
 
   // Periodic pull from cloud so admin changes appear on student devices
   useEffect(() => {
@@ -341,7 +443,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const cloud = await loadSharedFromCloud()
       if (!cloud) return
       if (cloud.notices) setNotices(cloud.notices)
-      if (cloud.messages) setMessages(cloud.messages)
+      if (cloud.messages) absorbMessages(cloud.messages, cloud.droppedMessageIds)
+      else if (cloud.droppedMessageIds?.length) rememberDropped(cloud.droppedMessageIds)
+      if (cloud.presence) {
+        setPresence((prev) => {
+          const next = { ...prev }
+          for (const [id, stamp] of Object.entries(cloud.presence!)) next[id] = newerStamp(prev[id], stamp)
+          return next
+        })
+      }
       if (cloud.instructors?.length) {
         setInstructors(cloud.instructors.map((i) => ({ ...i, phone: typeof i.phone === 'string' ? i.phone : '' })))
       }
@@ -362,8 +472,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (tableProfiles.length) setProfiles((prev) => mergeProfiles(prev, tableProfiles))
       const progressRows = await fetchTheoryProgress()
       if (progressRows.length) setTheoryProgress((prev) => mergeProgress(prev, progressRows))
+      const live = await fetchPresence()
+      if (Object.keys(live).length) {
+        setPresence((prev) => {
+          const next = { ...prev }
+          for (const [id, stamp] of Object.entries(live)) next[id] = newerStamp(prev[id], stamp)
+          return next
+        })
+      }
     }
-    const id = setInterval(pull, 15000)
+    const id = setInterval(pull, 8000)
     return () => clearInterval(id)
   }, [ready])
 
@@ -410,6 +528,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => { clearSession(); setSession(null) }, [])
+
+  useEffect(() => {
+    if (!ready || !session?.accountId) return
+    const ids = [session.accountId]
+    const phone = session.phone || ''
+    const match = students.find((s) => s.id === session.accountId || (phone && s.phone.replace(/\D/g, '') === phone.replace(/\D/g, '')))
+    if (match?.id && match.id !== session.accountId) ids.push(match.id)
+    let stop = false
+    const beat = () => {
+      if (stop || document.visibilityState === 'hidden') return
+      const iso = new Date().toISOString()
+      setPresence((prev) => {
+        const next = { ...prev }
+        for (const id of ids) next[id] = iso
+        return next
+      })
+      void touchPresence(ids)
+    }
+    beat()
+    const timer = setInterval(beat, 15000)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') beat()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      stop = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [ready, session?.accountId, session?.phone, students])
 
   const value = useMemo<Store>(() => {
     const meId = session?.accountId ?? 'me'
@@ -465,10 +613,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       questions, setQuestions, instructors, setInstructors, reviews, setReviews,
       addReview: (r) => setReviews((list) => [{ ...r, id: uid(), date: nowStamp().slice(0, 10), visible: true }, ...list]),
-      messages, sendMessage: (thread, text) => setMessages((list) => [...list, { id: uid(), thread, fromMe: true, text, time: nowTime(), studentId: me.id, authorName: me.name }]),
-      replyAsAdmin: (thread, text, meta) => setMessages((list) => [...list, { id: uid(), thread, fromMe: false, text, time: nowTime(), studentId: meta?.studentId, authorName: meta?.authorName || 'AvtoEmir' }]),
-      deleteMessage: (id) => setMessages((list) => list.filter((m) => m.id !== id)),
-      deleteChat: (thread, studentId) => setMessages((list) => list.filter((m) => !(m.thread === thread && (studentId == null || m.studentId === studentId)))),
+      messages,
+      sendMessage: (thread, text) => {
+        const msg: Message = { id: uid(), thread, fromMe: true, text, time: nowTime(), studentId: me.id, authorName: me.name }
+        setMessages((list) => {
+          const next = [...list, msg]
+          messagesRef.current = next
+          queueMicrotask(() => publishMessages(messagesRef.current))
+          return next
+        })
+      },
+      replyAsAdmin: (thread, text, meta) => {
+        const msg: Message = { id: uid(), thread, fromMe: false, text, time: nowTime(), studentId: meta?.studentId, authorName: meta?.authorName || 'AvtoEmir' }
+        setMessages((list) => {
+          const next = [...list, msg]
+          messagesRef.current = next
+          queueMicrotask(() => publishMessages(messagesRef.current))
+          return next
+        })
+      },
+      deleteMessage: (id) => {
+        rememberDropped([id])
+        setMessages((list) => {
+          const next = list.filter((m) => m.id !== id)
+          messagesRef.current = next
+          queueMicrotask(() => publishMessages(next))
+          return next
+        })
+      },
+      deleteChat: (thread, studentId) => {
+        setMessages((list) => {
+          const removed = list.filter((m) => m.thread === thread && (studentId == null || m.studentId === studentId)).map((m) => m.id)
+          rememberDropped(removed)
+          const next = list.filter((m) => !removed.includes(m.id))
+          messagesRef.current = next
+          queueMicrotask(() => publishMessages(next))
+          return next
+        })
+      },
       notices, markNoticesRead: () => setNotices((list) => list.map((n) => ({ ...n, read: true }))),
       broadcastNotice: (title, body) => pushNotice({ kind: 'announce', title, body }),
       deleteNotice: (id) => setNotices((list) => list.filter((n) => n.id !== id)),
@@ -478,8 +660,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       learnedSigns, toggleSign: (id, known) => setLearnedSigns((list) => (known ? Array.from(new Set([...list, id])) : list.filter((x) => x !== id))),
       roadSigns,
       setRoadSigns,
+      presence,
     }
-  }, [ready, session, login, register, logout, lang, students, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, updateStudent, pushNotice])
+  }, [ready, session, login, register, logout, lang, students, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, updateStudent, pushNotice, publishMessages, rememberDropped])
   // replyAsAdmin / sendMessage / broadcastNotice are stable enough via setState closures
 
   return (

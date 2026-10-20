@@ -37,6 +37,8 @@ export type SharedSlice = {
   profiles?: ProfileRow[]
   theoryProgress?: Record<string, string[]>
   roadSigns?: RoadSign[]
+  presence?: Record<string, string>
+  droppedMessageIds?: string[]
 }
 
 const KEYS = [
@@ -56,6 +58,8 @@ const KEYS = [
   'profiles',
   'theoryProgress',
   'roadSigns',
+  'presence',
+  'droppedMessageIds',
 ] as const
 
 export type SharedKey = (typeof KEYS)[number]
@@ -134,6 +138,12 @@ export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
         case 'roadSigns':
           if (Array.isArray(d)) out.roadSigns = d as RoadSign[]
           break
+        case 'presence':
+          if (d && typeof d === 'object' && !Array.isArray(d)) out.presence = d as Record<string, string>
+          break
+        case 'droppedMessageIds':
+          if (Array.isArray(d)) out.droppedMessageIds = d.filter((id) => typeof id === 'string')
+          break
       }
     }
     return out
@@ -184,6 +194,8 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.profiles) tasks.push(saveSharedKey('profiles', slice.profiles))
   if (slice.theoryProgress) tasks.push(saveSharedKey('theoryProgress', slice.theoryProgress))
   if (slice.roadSigns) tasks.push(saveSharedKey('roadSigns', slice.roadSigns))
+  if (slice.presence) tasks.push(saveSharedKey('presence', slice.presence))
+  if (slice.droppedMessageIds) tasks.push(saveSharedKey('droppedMessageIds', slice.droppedMessageIds))
   await Promise.all(tasks)
 }
 

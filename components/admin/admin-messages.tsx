@@ -5,6 +5,7 @@ import { MessageSquare, SendHorizontal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import { studentFullName } from '@/lib/student-name'
+import { OnlineBadge } from '@/components/shared/online-badge'
 import { cn } from '@/lib/utils'
 
 /**
@@ -12,7 +13,7 @@ import { cn } from '@/lib/utils'
  * Student messages: fromMe === true. Admin replies: fromMe === false.
  */
 export function AdminMessages() {
-  const { messages, students, profiles, replyAsAdmin, deleteMessage, deleteChat, tl } = useStore()
+  const { messages, students, profiles, presence, replyAsAdmin, deleteMessage, deleteChat, tl } = useStore()
   const listRef = useRef<HTMLDivElement>(null)
   const [text, setText] = useState('')
 
@@ -97,6 +98,7 @@ export function AdminMessages() {
                   active === th.id ? 'border-primary bg-primary text-primary-foreground' : 'bg-card',
                 )}
               >
+                <OnlineBadge lastSeen={th.id === 'legacy' ? undefined : presence[th.id]} onlineLabel="" offlineLabel="" compact />
                 {th.name}
               </button>
             ))}
@@ -106,7 +108,13 @@ export function AdminMessages() {
         <div className="rounded-xl border bg-muted/40">
           <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden="true" />
+              {active && active !== 'legacy' && (
+                <OnlineBadge
+                  lastSeen={presence[active]}
+                  onlineLabel={tl({ ru: 'онлайн', kk: 'онлайн' })}
+                  offlineLabel={tl({ ru: 'не в сети', kk: 'желіде емес' })}
+                />
+              )}
               <span className="truncate text-sm font-semibold">
                 {activeThread?.name ?? tl({ ru: 'Выберите студента', kk: 'Студентті таңдаңыз' })}
               </span>
