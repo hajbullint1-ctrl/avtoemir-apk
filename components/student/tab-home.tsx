@@ -9,7 +9,7 @@ import { useStore } from '@/lib/store'
 import { CATEGORIES, type Category, type DocKey } from '@/lib/data'
 import { uploadStudentDocument } from '@/lib/cloud-features'
 import type { DictKey } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
+import { cn, toWhatsAppNumber } from '@/lib/utils'
 
 const categoryLabel: Record<Category, DictKey> = {
   B: 'categoryB',
@@ -159,7 +159,7 @@ export function TabHome() {
         <div className="flex flex-col gap-2">
           {school.phoneEnrollment ? (
             <a
-              href={`https://wa.me/${school.phoneEnrollment.replace(/\D/g, '')}`}
+              href={`https://wa.me/${toWhatsAppNumber(school.phoneEnrollment)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between rounded-xl border border-primary/30 bg-accent/40 p-3 text-sm font-semibold hover:border-primary/50"
