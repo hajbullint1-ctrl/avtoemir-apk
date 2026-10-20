@@ -1,12 +1,13 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, Clock, FileText, Headphones, IdCard, ImagePlus, Phone, ShieldAlert, Upload, UserPlus, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
 import { Countdown } from './countdown'
 import { useStore } from '@/lib/store'
 import { CATEGORIES, type Category, type DocKey } from '@/lib/data'
+import { uploadStudentDocument } from '@/lib/cloud-features'
 import type { DictKey } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -18,8 +19,9 @@ const categoryLabel: Record<Category, DictKey> = {
 }
 
 function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
-  const { me, setDoc, t } = useStore()
+  const { me, setDoc, t, tl } = useStore()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
   const file = me.docs[docKey]
   const locked = me.status === 'pending' || me.status === 'approved'
   const isImage = file && !file.name.toLowerCase().endsWith('.pdf')
@@ -49,7 +51,7 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
         ) : (
           <span className="flex flex-col items-center gap-1 text-xs font-medium">
             <ImagePlus className="size-6" aria-hidden="true" />
-            {t('upload')}
+            {busy ? tl({ ru: 'Загрузка…', kk: 'Жүктелуде…' }) : t('upload')}
           </span>
         )}
         {file && (
@@ -65,10 +67,18 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
         accept="image/*,application/pdf"
         className="sr-only"
         tabIndex={-1}
-        onChange={(e) => {
+        disabled={busy || locked}
+        onChange={async (e) => {
           const f = e.target.files?.[0]
-          if (f) setDoc(docKey, { name: f.name, url: URL.createObjectURL(f) })
           e.target.value = ''
+          if (!f) return
+          setBusy(true)
+          try {
+            const url = await uploadStudentDocument(me.id, docKey, f)
+            setDoc(docKey, { name: f.name, url })
+          } finally {
+            setBusy(false)
+          }
         }}
       />
     </div>

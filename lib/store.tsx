@@ -89,6 +89,8 @@ type Store = {
   submitDocs: () => void
   approveStudent: (id: string, readyDate: string) => void
   rejectStudent: (id: string) => void
+  /** Clear uploaded files so the student can submit them again */
+  resetStudentDocs: (id: string) => void
   school: School
   setSchool: (s: School) => void
   theory: TheoryTopic[]
@@ -443,6 +445,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       submitDocs: () => updateStudent(me.id, (s) => ({ ...s, status: 'pending', submittedAt: nowStamp() })),
       approveStudent: (id, readyDate) => updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate })),
       rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected' })),
+      resetStudentDocs: (id) =>
+        updateStudent(id, (s) => ({
+          ...s,
+          docs: { idFront: null, idBack: null, psycho: null, narco: null },
+          status: 'draft',
+          readyDate: null,
+          submittedAt: null,
+        })),
       school, setSchool, theory, setTheory, profiles, theoryProgress,
       completeLesson: (lessonId) => {
         const sid = me.id

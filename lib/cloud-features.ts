@@ -70,6 +70,48 @@ function readFile(file: File): Promise<string> {
   })
 }
 
+/** Shrink ID photos so they survive sync if Storage is unavailable. */
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const blobUrl = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const max = 1600
+      const scale = Math.min(1, max / Math.max(img.width, img.height))
+      const width = Math.max(1, Math.round(img.width * scale))
+      const height = Math.max(1, Math.round(img.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        URL.revokeObjectURL(blobUrl)
+        reject(new Error('canvas'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, width, height)
+      URL.revokeObjectURL(blobUrl)
+      resolve(canvas.toDataURL('image/jpeg', 0.72))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl)
+      reject(new Error('image'))
+    }
+    img.src = blobUrl
+  })
+}
+
+async function durableFileUrl(file: File): Promise<string> {
+  if (file.type.startsWith('image/')) {
+    try {
+      return await compressImage(file)
+    } catch {
+      /* keep original */
+    }
+  }
+  return readFile(file)
+}
+
 /** Upload a theory lesson card to the public `theory-cards` bucket. Falls back to a data URL. */
 export async function uploadTheoryCard(file: File): Promise<string> {
   const sb = getSupabase()
@@ -87,5 +129,25 @@ export async function uploadTheoryCard(file: File): Promise<string> {
   }
   const { data } = sb.storage.from('theory-cards').getPublicUrl(path)
   if (!data?.publicUrl) return readFile(file)
+  return data.publicUrl
+}
+
+/** Upload a student document so the admin can open it on another device. */
+export async function uploadStudentDocument(studentId: string, docKey: string, file: File): Promise<string> {
+  const sb = getSupabase()
+  if (!sb) return durableFileUrl(file)
+  const safe = (file.name || 'doc').replace(/[^a-zA-Z0-9._-]/g, '') || 'doc'
+  const path = `${studentId || 'student'}/${docKey}-${Date.now()}-${safe}`
+  const { error } = await sb.storage.from('student-docs').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file.type || 'application/octet-stream',
+  })
+  if (error) {
+    console.warn('[storage] student-docs', error.message)
+    return durableFileUrl(file)
+  }
+  const { data } = sb.storage.from('student-docs').getPublicUrl(path)
+  if (!data?.publicUrl) return durableFileUrl(file)
   return data.publicUrl
 }

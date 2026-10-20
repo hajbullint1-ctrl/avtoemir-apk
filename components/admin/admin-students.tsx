@@ -68,13 +68,20 @@ function fileName(student: Student, key: DocKey, file: DocFile) {
   return `${student.name.replace(/\s+/g, '_')}_${key}.${ext}`
 }
 
-function downloadUrl(url: string, name: string) {
+async function saveRemoteFile(url: string, name: string) {
+  // blob: links exist only in the browser that created them and cannot be downloaded by admin.
+  if (!url || url.startsWith('blob:')) throw new Error('unreachable')
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('fetch')
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
+  a.href = objectUrl
   a.download = name
   document.body.appendChild(a)
   a.click()
   a.remove()
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 4000)
 }
 
 function PreviewModal({
@@ -250,35 +257,57 @@ function ProgressPanel({ student }: { student: Student }) {
 }
 
 function StudentDetail({ student, account }: { student: Student; account: Account | null }) {
-  const { tl, approveStudent, rejectStudent } = useStore()
+  const { tl, approveStudent, rejectStudent, resetStudentDocs } = useStore()
   const [preview, setPreview] = useState<DocKey | null>(null)
   const [date, setDate] = useState(student.readyDate ?? '')
   const [zipping, setZipping] = useState(false)
+  const [docError, setDocError] = useState('')
   const uploaded = DOC_KEYS.filter((k) => student.docs[k])
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => setDate(student.readyDate ?? ''), [student.id, student.readyDate])
 
-  const downloadOne = (k: DocKey) => {
+  const brokenHint = tl({
+    ru: 'Эти файлы сохранены только на телефоне студента и скачать их нельзя. Нажмите «Сбросить документы», чтобы студент отправил их ещё раз.',
+    kk: 'Бұл файлдар тек студенттің телефонында сақталған, жүктеу мүмкін емес. «Құжаттарды ысыру» батырмасын басыңыз.',
+  })
+
+  const downloadOne = async (k: DocKey) => {
     const f = student.docs[k]
-    if (f) downloadUrl(f.url, fileName(student, k, f))
+    if (!f) return
+    setDocError('')
+    try {
+      await saveRemoteFile(f.url, fileName(student, k, f))
+    } catch {
+      setDocError(brokenHint)
+    }
   }
 
   const downloadZip = async () => {
     setZipping(true)
+    setDocError('')
     try {
       const zip = new JSZip()
       await Promise.all(
         uploaded.map(async (k) => {
           const f = student.docs[k]!
-          const blob = await fetch(f.url).then((r) => r.blob())
-          zip.file(fileName(student, k, f), blob)
+          if (!f.url || f.url.startsWith('blob:')) throw new Error('unreachable')
+          const res = await fetch(f.url)
+          if (!res.ok) throw new Error('fetch')
+          zip.file(fileName(student, k, f), await res.blob())
         }),
       )
       const out = await zip.generateAsync({ type: 'blob' })
       const url = URL.createObjectURL(out)
-      downloadUrl(url, `${student.name.replace(/\s+/g, '_')}_documents.zip`)
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${student.name.replace(/\s+/g, '_')}_documents.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch {
+      setDocError(brokenHint)
     } finally {
       setZipping(false)
     }
@@ -330,6 +359,7 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
             {zipping ? '…' : tl({ ru: 'Скачать всё (ZIP)', kk: 'Барлығын жүктеу (ZIP)' })}
           </Button>
         </div>
+        {docError && <p className="mb-3 text-sm text-destructive">{docError}</p>}
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {DOC_KEYS.map((k) => {
             const f = student.docs[k]
@@ -413,6 +443,23 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
           >
             <XCircle className="size-4" aria-hidden="true" />
             {tl({ ru: 'Отклонить', kk: 'Қабылдамау' })}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10"
+            disabled={uploaded.length === 0 && student.status === 'draft'}
+            onClick={() => {
+              const ok = window.confirm(
+                tl({
+                  ru: 'Сбросить документы этого студента? Он сможет загрузить и отправить их ещё раз.',
+                  kk: 'Осы студенттің құжаттарын ысыру керек пе? Ол қайта жүктеп жібере алады.',
+                }),
+              )
+              if (ok) resetStudentDocs(student.id)
+            }}
+          >
+            <RefreshCw className="size-4" aria-hidden="true" />
+            {tl({ ru: 'Сбросить документы', kk: 'Құжаттарды ысыру' })}
           </Button>
         </div>
         {uploaded.length < 4 && (
