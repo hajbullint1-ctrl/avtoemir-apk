@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Bell, BookOpen, Building2, Car, ClipboardCheck, Lock, MessageSquare, MessageSquareText, Smartphone, Users, Signpost } from 'lucide-react'
+import { ArrowLeft, Bell, BookOpen, Building2, Car, ClipboardCheck, Lock, MessageSquare, MessageSquareText, Smartphone, Users, Signpost, Wrench } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
 import { AdminNotifications } from './admin-notifications'
@@ -60,7 +60,7 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 export function AdminApp() {
-  const { tl, students } = useStore()
+  const { tl, students, maintenanceMode, setMaintenanceMode } = useStore()
   const [active, setActive] = useState('students')
   const [unlocked, setUnlocked] = useState(false)
   const [checked, setChecked] = useState(false)
@@ -135,8 +135,30 @@ export function AdminApp() {
             </Link>
             <h1 className="text-xl font-bold">{tl(current.label)}</h1>
           </div>
-          <LangToggle tone="dark" className="hidden lg:inline-flex" />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={maintenanceMode ? 'default' : 'outline'}
+              size="sm"
+              className={cn('gap-1.5', maintenanceMode && 'bg-warning text-foreground hover:bg-warning/90')}
+              onClick={() => setMaintenanceMode(!maintenanceMode)}
+            >
+              <Wrench className="size-4" aria-hidden="true" />
+              {maintenanceMode
+                ? tl({ ru: 'Снять техработы', kk: 'Техжұмысты өшіру' })
+                : tl({ ru: 'Техработы', kk: 'Техжұмыс' })}
+            </Button>
+            <LangToggle tone="dark" className="hidden lg:inline-flex" />
+          </div>
         </header>
+        {maintenanceMode && (
+          <div className="border-b border-warning/40 bg-warning/15 px-5 py-2 text-center text-sm font-medium">
+            {tl({
+              ru: 'Включён режим технических работ — у всех учеников приложение заблокировано',
+              kk: 'Техникалық жұмыс режимі қосулы — барлық оқушыларда қосымша бұғатталған',
+            })}
+          </div>
+        )}
         <main className="flex-1 p-4 lg:p-6">
           <div className="mx-auto max-w-6xl">
             <current.Comp />
