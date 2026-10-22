@@ -87,7 +87,7 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
 }
 
 export function TabHome() {
-  const { t, tl, me, school, setCategory, submitDocs } = useStore()
+  const { t, tl, me, school, setCategory, submitDocs, deleteMyAccount } = useStore()
 
   const statusIcon =
     me.status === 'approved' ? (
@@ -109,24 +109,40 @@ export function TabHome() {
           ? t('statusPending')
           : t('statusDraft')
 
-  const initial = (me.name || '?').trim().charAt(0).toUpperCase()
-
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <section className="flex items-center gap-3 rounded-2xl border bg-card p-4">
-        <span
-          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground"
-          aria-hidden="true"
-        >
-          {initial}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">{t('greeting')}</p>
-          <h1 className="truncate text-lg font-bold leading-tight">{me.name || '—'}</h1>
-          {me.phone ? (
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{me.phone}</p>
-          ) : null}
+      <section className="rounded-2xl border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <span
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground"
+            aria-hidden="true"
+          >
+            {(me.name || '?').trim().charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground">{t('greeting')}</p>
+            <h1 className="truncate text-lg font-bold leading-tight">{me.name || '—'}</h1>
+            {me.phone ? (
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">{me.phone}</p>
+            ) : null}
+          </div>
         </div>
+        <button
+          type="button"
+          className="mt-3 w-full rounded-xl border border-destructive/40 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+          onClick={() => {
+            const ok = window.confirm(
+              tl({
+                ru: 'Удалить аккаунт и все связанные данные? Это действие нельзя отменить.',
+                kk: 'Аккаунтты және барлық деректерді жою керек пе? Бұл әрекетті қайтару мүмкін емес.',
+              }),
+            )
+            if (!ok) return
+            deleteMyAccount()
+          }}
+        >
+          {tl({ ru: 'Удалить аккаунт', kk: 'Аккаунтты жою' })}
+        </button>
       </section>
 
       <Section title={t('enrollment')}>
