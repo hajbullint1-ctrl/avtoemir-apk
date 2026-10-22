@@ -237,6 +237,17 @@ export function TabAbout() {
           ))}
         </ul>
       </Section>
+
+      <Section title={tl({ ru: 'Данные и аккаунт', kk: 'Деректер және аккаунт' })}>
+        <div className="flex flex-col gap-2 text-sm">
+          <a href="/privacy" className="rounded-xl border p-3 font-medium hover:border-primary/50">
+            {tl({ ru: 'Политика конфиденциальности', kk: 'Құпиялылық саясаты' })}
+          </a>
+          <a href="/delete-account" className="rounded-xl border border-destructive/30 p-3 font-medium text-destructive hover:bg-destructive/5">
+            {tl({ ru: 'Удаление аккаунта (веб)', kk: 'Аккаунтты жою (веб)' })}
+          </a>
+        </div>
+      </Section>
     </div>
   )
 }
