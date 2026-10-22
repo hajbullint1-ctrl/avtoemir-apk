@@ -32,6 +32,7 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
   const { tl } = useStore()
   const [password, setPassword] = useState('')
   const [error, setError] = useState(false)
+  const [busy, setBusy] = useState(false)
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-lg">
@@ -42,14 +43,43 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
           <h1 className="text-lg font-extrabold">{tl({ ru: 'Панель администратора', kk: 'Әкімші панелі' })}</h1>
           <p className="text-sm text-muted-foreground">{tl({ ru: 'Введите пароль для доступа', kk: 'Кіру үшін құпия сөзді енгізіңіз' })}</p>
         </div>
-        <form className="flex flex-col gap-3" onSubmit={(e) => {
+        <form className="flex flex-col gap-3" onSubmit={async (e) => {
           e.preventDefault()
-          if (checkAdminPassword(password)) { setAdminSession(); onUnlock() } else setError(true)
+          setError(false)
+          setBusy(true)
+          try {
+            const res = await fetch('/api/admin-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok && data?.ok) {
+              setAdminSession()
+              onUnlock()
+              return
+            }
+            if (checkAdminPassword(password)) {
+              setAdminSession()
+              onUnlock()
+              return
+            }
+            setError(true)
+          } catch {
+            if (checkAdminPassword(password)) {
+              setAdminSession()
+              onUnlock()
+            } else setError(true)
+          } finally {
+            setBusy(false)
+          }
         }}>
           <input type="password" autoFocus value={password} onChange={(e) => { setPassword(e.target.value); setError(false) }}
-            placeholder="••••••••" className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-primary focus:ring-2" />
+            placeholder="••••••••" className="h-11 rounded-xl border bg-background px-3 text-sm outline-none ring-primary focus:ring-2" disabled={busy} />
           {error && <p className="text-sm text-destructive" role="alert">{tl({ ru: 'Неверный пароль', kk: 'Құпия сөз қате' })}</p>}
-          <Button type="submit" className="w-full">{tl({ ru: 'Войти', kk: 'Кіру' })}</Button>
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? tl({ ru: 'Проверка…', kk: 'Тексеру…' }) : tl({ ru: 'Войти', kk: 'Кіру' })}
+          </Button>
         </form>
         <p className="mt-4 text-center text-xs text-muted-foreground">
           <Link href="/" className="underline-offset-2 hover:underline">{tl({ ru: 'Вернуться в приложение', kk: 'Қолданбаға оралу' })}</Link>
