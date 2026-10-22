@@ -143,6 +143,12 @@ export function TabHome() {
         >
           {tl({ ru: 'Удалить аккаунт', kk: 'Аккаунтты жою' })}
         </button>
+        <a href="/delete-account" className="mt-2 block text-center text-xs text-muted-foreground underline-offset-2 hover:underline">
+          {tl({ ru: 'Или запросить удаление на сайте', kk: 'Немесе сайтта жоюды сұрау' })}
+        </a>
+        <a href="/privacy" className="mt-1 block text-center text-xs text-muted-foreground underline-offset-2 hover:underline">
+          {tl({ ru: 'Политика конфиденциальности', kk: 'Құпиялылық саясаты' })}
+        </a>
       </section>
 
       <Section title={t('enrollment')}>
