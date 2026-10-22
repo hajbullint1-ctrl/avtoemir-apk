@@ -37,8 +37,8 @@ function ensureTheoryContent(list: TheoryTopic[]): TheoryTopic[] {
 type Store = {
   ready: boolean
   session: Session | null
-  login: (phone: string, password: string) => { ok: true } | { ok: false; error: string }
-  register: (fullName: string, phone: string, password: string) => { ok: true } | { ok: false; error: string }
+  login: (phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  register: (fullName: string, phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   logout: () => void
   deleteMyAccount: () => { ok: true } | { ok: false; error: string }
   lang: Lang
@@ -153,9 +153,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.theory?.length) setTheory((prev) => ensureTheoryContent(mergeById(prev, cloud.theory!)))
       if (cloud?.questions?.length) setQuestions((prev) => mergeById(prev, cloud.questions!))
       if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns((prev) => mergeById(prev, cloud.roadSigns!))
-      if (Array.isArray(cloud?.reviews) && cloud.reviews.length) {
-        setReviews((prev) => mergeById(prev, cloud.reviews!))
-      }
+      if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews((prev) => mergeById(prev, cloud.reviews!))
       if (cloud?.messages) setMessages(cloud.messages)
       if (cloud?.bookings) setBookings((prev) => mergeById(prev, cloud.bookings!))
       if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
@@ -246,16 +244,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Store>(() => ({
     ready,
     session,
-    login: (phone, password) => {
-      const r = loginAccount(phone, password)
+    login: async (phone, password) => {
+      const r = await loginAccount(phone, password)
       if (r.ok) setSession(r.session)
       return r.ok ? { ok: true } : { ok: false, error: r.error }
     },
-    register: (fullName, phone, password) => {
-      const r = registerAccount(fullName, phone, password)
+    register: async (fullName, phone, password) => {
+      const r = await registerAccount(fullName, phone, password)
       if (r.ok) {
         setSession(r.session)
-        const st: Student = {
+        const student: Student = {
           id: r.session.accountId,
           name: fullName,
           phone: r.session.phone,
@@ -266,7 +264,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           submittedAt: null,
         }
         setStudents((list) => {
-          const next = [...list.filter((s) => s.id !== st.id), st]
+          const next = [...list.filter((s) => s.id !== student.id), student]
           void saveSharedKey('students', next)
           return next
         })
@@ -283,8 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         void saveSharedKey('students', next)
         return next
       })
-      const accounts = listAccounts().filter((a) => a.id !== id)
-      void saveSharedKey('accounts', accounts)
+      void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
       void (async () => {
         const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
         const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
