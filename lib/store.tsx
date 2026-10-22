@@ -11,7 +11,7 @@ import {
   type Notice, type Question, type Review, type School, type Student, type TestResult, type TheoryTopic, type RoadSign,
 } from './data'
 import {
-  clearSession, listAccounts, listPasswordRecoveryRequests, loadSession, loginAccount,
+  clearSession, deleteAccount, listAccounts, listPasswordRecoveryRequests, loadSession, loginAccount,
   mergeAccountsFromCloud, mergeRecoveryFromCloud, registerAccount, type Session,
 } from './auth'
 import { loadPersisted, savePersisted } from './persist'
@@ -40,6 +40,7 @@ type Store = {
   login: (phone: string, password: string) => { ok: true } | { ok: false; error: string }
   register: (fullName: string, phone: string, password: string) => { ok: true } | { ok: false; error: string }
   logout: () => void
+  deleteMyAccount: () => { ok: true } | { ok: false; error: string }
   lang: Lang
   setLang: (l: Lang) => void
   t: (k: DictKey) => string
@@ -273,6 +274,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return r.ok ? { ok: true } : { ok: false, error: r.error }
     },
     logout: () => { clearSession(); setSession(null) },
+    deleteMyAccount: () => {
+      const id = session?.accountId
+      if (!id) return { ok: false as const, error: 'session' }
+      deleteAccount(id)
+      setStudents((list) => {
+        const next = list.filter((s) => s.id !== id)
+        void saveSharedKey('students', next)
+        return next
+      })
+      void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
+      clearSession()
+      setSession(null)
+      return { ok: true as const }
+    },
     lang,
     setLang,
     t: (k) => dict[lang][k] || k,
