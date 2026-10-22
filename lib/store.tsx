@@ -12,19 +12,15 @@ import {
 } from './data'
 import {
   clearSession, listAccounts, listPasswordRecoveryRequests, loadSession, loginAccount,
-  mergeAccountsFromCloud, mergeRecoveryFromCloud, registerAccount, setAccountsCloudHooks, type Session,
+  mergeAccountsFromCloud, mergeRecoveryFromCloud, registerAccount, type Session,
 } from './auth'
-import { loadPersisted, onPersistedChange, savePersisted } from './persist'
+import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
   mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
-import { fetchPresence, newerStamp, touchPresence } from './presence'
-import { syncCertificateWidget } from './certificate-widget'
-import {
-  fetchProfiles, fetchTheoryProgress, upsertProfile, upsertTheoryProgress, type ProfileRow,
-} from './cloud-features'
+import { upsertTheoryProgress, type ProfileRow } from './cloud-features'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const nowTime = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -150,7 +146,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.instructors?.length) setInstructors(cloud.instructors)
       if (cloud?.notices?.length) setNotices(cloud.notices)
       if (cloud?.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
-      // CRITICAL: theory, questions, road signs from Supabase
       if (cloud?.theory?.length) setTheory((prev) => ensureTheoryContent(mergeById(prev, cloud.theory!)))
       if (cloud?.questions?.length) setQuestions((prev) => mergeById(prev, cloud.questions!))
       if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns((prev) => mergeById(prev, cloud.roadSigns!))
