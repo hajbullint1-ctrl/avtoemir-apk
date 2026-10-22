@@ -86,6 +86,8 @@ type Store = {
   roadSigns: RoadSign[]
   setRoadSigns: (s: RoadSign[]) => void
   presence: Record<string, string>
+  maintenanceMode: boolean
+  setMaintenanceMode: (on: boolean) => void
 }
 
 const StoreContext = createContext<Store | null>(null)
@@ -109,6 +111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<ProfileRow[]>([])
   const [theoryProgress, setTheoryProgress] = useState<Record<string, string[]>>({})
   const [presence, setPresence] = useState<Record<string, string>>({})
+  const [maintenanceMode, setMaintenanceModeState] = useState(false)
 
   useEffect(() => {
     setSession(loadSession())
@@ -160,6 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.learnedSigns) setLearnedSigns((prev) => mergeStringLists(prev, cloud.learnedSigns!))
       if (cloud?.theoryProgress) setTheoryProgress((prev) => mergeProgressMaps(prev, cloud.theoryProgress!))
       if (cloud?.presence) setPresence((prev) => ({ ...prev, ...cloud.presence }))
+      if (typeof cloud?.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
       void hydrateMistakes()
       setReady(true)
     })()
@@ -191,6 +195,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void loadMessagesBundle().then((bundle) => {
         if (bundle?.messages) setMessages(bundle.messages)
       })
+      void loadSharedKeys(['maintenanceMode']).then((c) => {
+        if (c && typeof c.maintenanceMode === 'boolean') setMaintenanceModeState(c.maintenanceMode)
+      })
     }
     const id = setInterval(tick, 2000)
     return () => clearInterval(id)
@@ -205,8 +212,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud.notices) setNotices(cloud.notices)
       if (cloud.messages) setMessages(cloud.messages)
       if (cloud.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
+      if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
     }
-    const id = setInterval(pull, 45000)
+    const id = setInterval(pull, 15000)
     return () => clearInterval(id)
   }, [ready])
 
@@ -383,9 +391,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     roadSigns,
     setRoadSigns,
     presence,
+    maintenanceMode,
+    setMaintenanceMode: (on: boolean) => {
+      setMaintenanceModeState(on)
+      void saveSharedKey('maintenanceMode', on)
+    },
   }), [
     ready, session, lang, students, me, school, theory, profiles, theoryProgress,
-    questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, updateStudent,
+    questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, maintenanceMode, updateStudent,
   ])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
