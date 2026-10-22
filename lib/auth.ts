@@ -6,10 +6,7 @@ export type Account = {
   phone: string
   /** Simple salted hash — not for high-security production; replace with server auth when adding Supabase. */
   passwordHash: string
-  /**
-   * Plain password kept only for demo admin recovery (localStorage).
-   * In production use server-side reset tokens / SMS OTP — never store plaintext.
-   */
+  /** @deprecated Never store plaintext. Stripped on save; kept optional only for reading old data. */
   passwordPlain?: string
   createdAt: string
 }
@@ -74,49 +71,56 @@ export function setAccountsCloudHooks(hooks: {
   onRecoveryChanged = hooks.onRecovery ?? null
 }
 
+function stripPlain(list: Account[]): Account[] {
+  return list.map(({ passwordPlain: _p, ...a }) => a as Account)
+}
+
 function saveAccounts(list: Account[]) {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list))
-  onAccountsChanged?.(list)
+  const cleaned = stripPlain(list)
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(cleaned))
+  onAccountsChanged?.(cleaned)
 }
 
 /**
- * Merge remote accounts into local (by id, then phone).
- * Remote passwordPlain wins when present so admin recovery works on any device.
+ * Cloud is source of truth for which accounts exist.
+ * Local only supplements missing fields. Optional deletedIds tombstones prevent resurrection.
+ * Cloud is source of truth; plaintext passwords are never kept.
  */
-export function mergeAccountsFromCloud(remote: Account[]): Account[] {
+export function mergeAccountsFromCloud(remote: Account[], deletedIds: string[] = []): Account[] {
   if (!Array.isArray(remote) || remote.length === 0) return loadAccounts()
+  const ban = new Set(['me', ...deletedIds])
   const local = loadAccounts()
-  const byId = new Map(local.map((a) => [a.id, a]))
-  const byPhone = new Map(local.map((a) => [normalizePhone(a.phone), a]))
+  const localById = new Map(local.map((a) => [a.id, a]))
+  const localByPhone = new Map(local.map((a) => [normalizePhone(a.phone), a]))
+  const out: Account[] = []
+  const seen = new Set<string>()
 
   for (const r of remote) {
+    if (!r?.id || ban.has(r.id)) continue
     const phone = normalizePhone(r.phone)
-    const existing = byId.get(r.id) ?? byPhone.get(phone)
-    if (!existing) {
-      const next = { ...r, phone }
-      local.push(next)
-      byId.set(next.id, next)
-      byPhone.set(phone, next)
-    } else {
-      const idx = local.findIndex((a) => a.id === existing.id)
-      if (idx < 0) continue
-      local[idx] = {
-        ...existing,
-        ...r,
-        id: existing.id,
-        phone: phone || existing.phone,
-        passwordHash: r.passwordHash || existing.passwordHash,
-        passwordPlain: r.passwordPlain ?? existing.passwordPlain,
-        fullName: r.fullName || existing.fullName,
-        createdAt: existing.createdAt || r.createdAt,
-      }
-      byId.set(local[idx].id, local[idx])
-      byPhone.set(normalizePhone(local[idx].phone), local[idx])
+    if (phone.replace(/\D/g, '') === '77015551234') continue
+    const existing = localById.get(r.id) ?? localByPhone.get(phone)
+    const next: Account = {
+      ...r,
+      id: r.id,
+      phone: phone || existing?.phone || r.phone,
+      passwordHash: r.passwordHash || existing?.passwordHash || '',
+      fullName: r.fullName || existing?.fullName || '',
+      createdAt: existing?.createdAt || r.createdAt,
     }
+    out.push(next)
+    seen.add(next.id)
   }
-  // Write without re-triggering cloud push storm on hydrate
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(local))
-  return local
+
+  for (const a of local) {
+    if (!a?.id || ban.has(a.id) || seen.has(a.id)) continue
+    out.push(a)
+    seen.add(a.id)
+  }
+
+  const cleaned = stripPlain(out)
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(cleaned))
+  return cleaned
 }
 
 export function mergeRecoveryFromCloud(remote: PasswordRecoveryRequest[]): PasswordRecoveryRequest[] {
@@ -174,7 +178,6 @@ export function registerAccount(
     fullName: name,
     phone: ph,
     passwordHash: hashPassword(pw),
-    passwordPlain: pw,
     createdAt: new Date().toISOString(),
   }
   accounts.push(account)
@@ -192,11 +195,6 @@ export function loginAccount(
   const account = accounts.find((a) => a.phone === ph)
   if (!account) return { ok: false, error: 'notfound' }
   if (account.passwordHash !== hashPassword(password)) return { ok: false, error: 'password' }
-  // Backfill plain for accounts registered before this field existed (only if login succeeds with known password)
-  if (!account.passwordPlain) {
-    account.passwordPlain = password.trim()
-    saveAccounts(accounts)
-  }
   const session = createSession(account)
   return { ok: true, session }
 }
@@ -214,7 +212,6 @@ export function requestPasswordRecovery(
   if (!account) return { ok: false, error: 'notfound' }
 
   const list = loadRecoveryRequests()
-  // Avoid spam: one open request per account
   if (!list.some((r) => r.accountId === account.id && !r.resolved)) {
     list.unshift({
       id: uid(),
@@ -257,10 +254,9 @@ export function resolvePasswordRecovery(id: string) {
   saveRecoveryRequests(list)
 }
 
-/** Admin: view stored demo password (if available). */
-export function getAccountPassword(accountId: string): string | null {
-  const a = loadAccounts().find((x) => x.id === accountId)
-  return a?.passwordPlain ?? null
+/** @deprecated Plaintext passwords are not stored. Always returns null. */
+export function getAccountPassword(_accountId: string): string | null {
+  return null
 }
 
 /** Admin: set a new password for the student. */
@@ -273,13 +269,12 @@ export function adminResetPassword(
   const accounts = loadAccounts()
   const idx = accounts.findIndex((a) => a.id === accountId)
   if (idx < 0) return { ok: false, error: 'notfound' }
+  const { passwordPlain: _drop, ...rest } = accounts[idx] as Account & { passwordPlain?: string }
   accounts[idx] = {
-    ...accounts[idx],
+    ...rest,
     passwordHash: hashPassword(pw),
-    passwordPlain: pw,
   }
   saveAccounts(accounts)
-  // Mark open recovery requests for this account as resolved
   const reqs = loadRecoveryRequests().map((r) =>
     r.accountId === accountId && !r.resolved ? { ...r, resolved: true } : r,
   )
@@ -288,8 +283,7 @@ export function adminResetPassword(
 }
 
 /**
- * Self-service reset: student sets a new password using registered phone (demo).
- * Also resolves open recovery requests for that account.
+ * Self-service reset: student sets a new password using registered phone.
  */
 export function resetPasswordByPhone(
   phone: string,
@@ -303,10 +297,10 @@ export function resetPasswordByPhone(
   const idx = accounts.findIndex((a) => a.phone === ph)
   if (idx < 0) return { ok: false, error: 'notfound' }
   const accountId = accounts[idx].id
+  const { passwordPlain: _drop, ...rest } = accounts[idx] as Account & { passwordPlain?: string }
   accounts[idx] = {
-    ...accounts[idx],
+    ...rest,
     passwordHash: hashPassword(pw),
-    passwordPlain: pw,
   }
   saveAccounts(accounts)
   const reqs = loadRecoveryRequests().map((r) =>
@@ -362,12 +356,35 @@ export function updateSessionProfile(patch: { fullName?: string }) {
   }
 }
 
-/** Admin gate — password stored hashed in localStorage after first unlock this browser. */
+export function deleteAccount(accountId: string): boolean {
+  if (!accountId) return false
+  const next = loadAccounts().filter((a) => a.id !== accountId)
+  saveAccounts(next)
+  const recovery = loadRecoveryRequests().filter((r) => r.accountId !== accountId)
+  saveRecoveryRequests(recovery)
+  try {
+    const sess = loadSession()
+    if (sess?.accountId === accountId) clearSession()
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+/** Admin gate — session in localStorage after unlock. Password from env only. */
 const ADMIN_SESSION_KEY = 'avtoemir.admin.session.v1'
-const ADMIN_PASSWORD = 'emir2026' // change in production / move to env
+/** Admin password: set NEXT_PUBLIC_ADMIN_PASSWORD on Vercel. */
+const ADMIN_PASSWORD =
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ADMIN_PASSWORD?.trim()) ||
+  ''
 
 export function checkAdminPassword(password: string): boolean {
-  return password.trim() === ADMIN_PASSWORD
+  const expected = ADMIN_PASSWORD
+  if (!expected) {
+    console.warn('[auth] NEXT_PUBLIC_ADMIN_PASSWORD is not set')
+    return false
+  }
+  return password.trim() === expected
 }
 
 export function setAdminSession() {
@@ -380,7 +397,6 @@ export function hasAdminSession(): boolean {
     const raw = localStorage.getItem(ADMIN_SESSION_KEY)
     if (!raw) return false
     const s = JSON.parse(raw)
-    // 12h admin session
     return Boolean(s?.ok) && Date.now() - (s.at || 0) < 12 * 60 * 60 * 1000
   } catch {
     return false
