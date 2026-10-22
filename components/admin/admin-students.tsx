@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Download,
-  Eye,
-  EyeOff,
   KeyRound,
   Phone,
   RefreshCw,
@@ -17,7 +15,6 @@ import { OnlineBadge } from '@/components/shared/online-badge'
 import { DOC_KEYS, type DocKey, type DocStatus, type Student } from '@/lib/data'
 import {
   adminResetPassword,
-  getAccountPassword,
   listAccounts,
   type Account,
 } from '@/lib/auth'
@@ -55,21 +52,12 @@ export function StatusBadge({ status }: { status: DocStatus }) {
 
 function PasswordPanel({ accountId }: { accountId: string }) {
   const { tl } = useStore()
-  const [visible, setVisible] = useState(false)
   const [password, setPassword] = useState<string | null>(null)
   const [newPw, setNewPw] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
 
-  const reveal = () => {
-    const p = getAccountPassword(accountId)
-    setPassword(p)
-    setVisible(true)
-    if (!p) setMsg(tl({ ru: 'Пароль недоступен (старый аккаунт). Задайте новый.', kk: 'Құпия сөз қолжетімсіз. Жаңасын орнатыңыз.' }))
-    else setMsg(null)
-  }
-
   const reset = () => {
-    const pw = newPw.trim() || Math.random().toString(36).slice(2, 8)
+    const pw = newPw.trim() || Math.random().toString(36).slice(2, 10)
     const res = adminResetPassword(accountId, pw)
     if (!res.ok) {
       setMsg(tl({ ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' }))
@@ -77,8 +65,10 @@ function PasswordPanel({ accountId }: { accountId: string }) {
     }
     setPassword(res.password)
     setNewPw('')
-    setVisible(true)
-    setMsg(tl({ ru: 'Пароль обновлён. Сообщите его студенту.', kk: 'Құпия сөз жаңартылды. Студентке хабарлаңыз.' }))
+    setMsg(tl({
+      ru: 'Новый пароль задан. Передайте его студенту — старый посмотреть нельзя.',
+      kk: 'Жаңа құпия сөз орнатылды. Студентке беріңіз — ескісін көру мүмкін емес.',
+    }))
   }
 
   return (
@@ -87,15 +77,15 @@ function PasswordPanel({ accountId }: { accountId: string }) {
         <KeyRound className="size-4 text-primary" aria-hidden="true" />
         {tl({ ru: 'Пароль студента', kk: 'Студент құпия сөзі' })}
       </h3>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={reveal}>
-          {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-          {visible ? tl({ ru: 'Скрыть', kk: 'Жасыру' }) : tl({ ru: 'Показать пароль', kk: 'Құпия сөзді көрсету' })}
-        </Button>
-        {visible && password && (
-          <code className="rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold tracking-wide">{password}</code>
-        )}
-      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        {tl({
+          ru: 'Пароли не хранятся открытым текстом. Задайте новый — он один раз покажется здесь.',
+          kk: 'Құпия сөздер ашық сақталмайды. Жаңасын орнатыңыз — бір рет осында көрсетіледі.',
+        })}
+      </p>
+      {password && (
+        <code className="mb-2 block rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold tracking-wide">{password}</code>
+      )}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
           {tl({ ru: 'Новый пароль (пусто = сгенерировать)', kk: 'Жаңа құпия сөз (бос = генерация)' })}
