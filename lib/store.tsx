@@ -279,11 +279,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!id) return { ok: false as const, error: 'session' }
       deleteAccount(id)
       setStudents((list) => {
-        const next = list.filter((s) => s.id !== id)
+        const next = list.filter((s) => s.id !== id && s.id !== 'me')
         void saveSharedKey('students', next)
         return next
       })
-      void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
+      const accounts = listAccounts().filter((a) => a.id !== id)
+      void saveSharedKey('accounts', accounts)
+      void (async () => {
+        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
+        const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
+        const delS = [...new Set([...(cloud?.deletedStudentIds || []), id])]
+        await saveSharedKey('deletedAccountIds', delA)
+        await saveSharedKey('deletedStudentIds', delS)
+      })()
       clearSession()
       setSession(null)
       return { ok: true as const }
@@ -307,12 +315,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         submittedAt: null,
       })),
     deleteStudent: (id) => {
-      if (!id) return
+      if (!id || id === 'me') return
+      deleteAccount(id)
       setStudents((list) => {
         const next = list.filter((s) => s.id !== id && s.id !== 'me')
         void saveSharedKey('students', next)
         return next
       })
+      void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
+      void (async () => {
+        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
+        const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
+        const delS = [...new Set([...(cloud?.deletedStudentIds || []), id])]
+        await saveSharedKey('deletedAccountIds', delA)
+        await saveSharedKey('deletedStudentIds', delS)
+      })()
     },
     school,
     setSchool,
