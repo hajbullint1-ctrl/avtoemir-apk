@@ -1,6 +1,7 @@
 /**
  * Work-on-mistakes: localStorage + Supabase app_state.studentMistakes
  * Cloud is source of truth when available; local is offline cache.
+ * Always merge so concurrent devices don't wipe each other.
  */
 
 import { getSupabase, isSupabaseConfigured } from './supabase'
@@ -76,6 +77,12 @@ export async function hydrateMistakes(): Promise<MistakeMap> {
 export function getMistakeIds(studentId: string): string[] {
   const map = readLocal()
   return Array.isArray(map[studentId]) ? [...map[studentId]] : []
+}
+
+/** Alias used by tab-tests */
+export async function fetchUnresolvedMistakeIds(studentId: string): Promise<string[]> {
+  await hydrateMistakes()
+  return getMistakeIds(studentId)
 }
 
 export function recordMistake(studentId: string, questionId: string) {
