@@ -26,7 +26,7 @@ export function AuthScreen() {
     const map: Record<string, { ru: string; kk: string }> = {
       name: { ru: 'Укажите имя и фамилию', kk: 'Аты-жөніңізді енгізіңіз' },
       phone: { ru: 'Укажите корректный номер телефона', kk: 'Дұрыс телефон нөмірін енгізіңіз' },
-      password: { ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' },
+      password: { ru: 'Пароль не менее 6 символов', kk: 'Құпия сөз кемінде 6 таңба' },
       mismatch: { ru: 'Пароли не совпадают', kk: 'Құпия сөздер сәйкес емес' },
       exists: { ru: 'Этот номер уже зарегистрирован. Войдите или восстановите пароль.', kk: 'Бұл нөмір тіркелген. Кіріңіз немесе құпия сөзді қалпына келтіріңіз.' },
       notfound: { ru: 'Аккаунт с таким номером не найден', kk: 'Мұндай нөмірмен аккаунт табылмады' },
@@ -44,22 +44,21 @@ export function AuthScreen() {
     setPassword2('')
   }
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setSuccess(null)
     setBusy(true)
     try {
       if (mode === 'register') {
-        const res = register(fullName, phone, password)
+        const res = await register(fullName, phone, password)
         if (!res.ok) setError(errorText(res.error === 'password' ? 'password' : res.error))
       } else if (mode === 'forgot') {
         if (password !== password2) {
           setError(errorText('mismatch'))
           return
         }
-        // Self-service: set new password by phone; also leave a recovery note for admin
-        const reset = resetPasswordByPhone(phone, password)
+        const reset = await resetPasswordByPhone(phone, password)
         if (!reset.ok) {
           setError(errorText(reset.error))
           return
@@ -74,7 +73,7 @@ export function AuthScreen() {
         setPassword2('')
         setTimeout(() => switchMode('login'), 1500)
       } else {
-        const res = login(phone, password)
+        const res = await login(phone, password)
         if (!res.ok) setError(errorText(res.error === 'password' ? 'wrong' : res.error))
       }
     } finally {
@@ -108,7 +107,7 @@ export function AuthScreen() {
               {mode === 'login' &&
                 tl({ ru: 'Войдите, чтобы продолжить обучение и тесты', kk: 'Оқу мен тесттерді жалғастыру үшін кіріңіз' })}
               {mode === 'register' &&
-                tl({ ru: 'Создайте аккаунт: имя, телефон и пароль', kk: 'Аккаунт жасаңыз: аты, телефон және құпия сөз' })}
+                tl({ ru: 'Создайте аккаунт: имя, телефон и пароль (от 6 символов)', kk: 'Аккаунт жасаңыз: аты, телефон және құпия сөз (кемінде 6 таңба)' })}
               {mode === 'forgot' &&
                 tl({
                   ru: 'Введите номер телефона и новый пароль — пароль сменится сразу',
@@ -160,7 +159,7 @@ export function AuthScreen() {
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    minLength={4}
+                    minLength={6}
                     className="h-11 w-full rounded-xl border bg-card px-3 pr-11 text-sm outline-none ring-primary focus:ring-2"
                   />
                   <button
@@ -185,7 +184,7 @@ export function AuthScreen() {
                   autoComplete="new-password"
                   value={password2}
                   onChange={(e) => setPassword2(e.target.value)}
-                  minLength={4}
+                  minLength={6}
                   className="h-11 w-full rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
                 />
               </label>
@@ -236,11 +235,7 @@ export function AuthScreen() {
             {mode === 'login' && (
               <>
                 {tl({ ru: 'Нет аккаунта?', kk: 'Аккаунт жоқ па?' })}{' '}
-                <button
-                  type="button"
-                  className={cn('font-semibold text-primary underline-offset-2 hover:underline')}
-                  onClick={() => switchMode('register')}
-                >
+                <button type="button" className={cn('font-semibold text-primary underline-offset-2 hover:underline')} onClick={() => switchMode('register')}>
                   {tl({ ru: 'Регистрация', kk: 'Тіркелу' })}
                 </button>
               </>
@@ -248,11 +243,7 @@ export function AuthScreen() {
             {mode === 'register' && (
               <>
                 {tl({ ru: 'Уже есть аккаунт?', kk: 'Аккаунт бар ма?' })}{' '}
-                <button
-                  type="button"
-                  className="font-semibold text-primary underline-offset-2 hover:underline"
-                  onClick={() => switchMode('login')}
-                >
+                <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => switchMode('login')}>
                   {tl({ ru: 'Войти', kk: 'Кіру' })}
                 </button>
               </>
@@ -260,11 +251,7 @@ export function AuthScreen() {
             {mode === 'forgot' && (
               <>
                 {tl({ ru: 'Вспомнили пароль?', kk: 'Құпия сөз еске түсті ме?' })}{' '}
-                <button
-                  type="button"
-                  className="font-semibold text-primary underline-offset-2 hover:underline"
-                  onClick={() => switchMode('login')}
-                >
+                <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => switchMode('login')}>
                   {tl({ ru: 'Войти', kk: 'Кіру' })}
                 </button>
               </>
