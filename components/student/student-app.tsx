@@ -24,7 +24,7 @@ const tabs: { id: string; label: DictKey; icon: typeof House; Comp: () => React.
 ]
 
 export function StudentApp() {
-  const { t, notices, session, ready, logout, tl } = useStore()
+  const { t, notices, session, ready, logout, tl, maintenanceMode } = useStore()
   const [active, setActive] = useState('home')
   const mainRef = useRef<HTMLElement>(null)
   const current = tabs.find((x) => x.id === active)!
@@ -39,6 +39,34 @@ export function StudentApp() {
   }
 
   if (!session) return <AuthScreen />
+
+  if (maintenanceMode) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/60 p-6 text-center">
+        <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-lg">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-warning/25 text-2xl" aria-hidden="true">
+            🔧
+          </div>
+          <h1 className="text-xl font-bold">
+            {tl({ ru: 'Технические работы', kk: 'Техникалық жұмыстар' })}
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {tl({
+              ru: 'Сейчас ведутся технические работы. Приложение временно недоступно. Попробуйте позже.',
+              kk: 'Қазір техникалық жұмыстар жүргізілуде. Қосымша уақытша қолжетімсіз. Кейінірек қайталап көріңіз.',
+            })}
+          </p>
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-6 w-full rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-muted"
+          >
+            {tl({ ru: 'Выйти', kk: 'Шығу' })}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/60 md:items-center md:justify-center md:p-6">
