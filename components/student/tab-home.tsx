@@ -109,8 +109,26 @@ export function TabHome() {
           ? t('statusPending')
           : t('statusDraft')
 
+  const initial = (me.name || '?').trim().charAt(0).toUpperCase()
+
   return (
     <div className="flex flex-col gap-4 pb-24">
+      <section className="flex items-center gap-3 rounded-2xl border bg-card p-4">
+        <span
+          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground"
+          aria-hidden="true"
+        >
+          {initial}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground">{t('greeting')}</p>
+          <h1 className="truncate text-lg font-bold leading-tight">{me.name || '—'}</h1>
+          {me.phone ? (
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">{me.phone}</p>
+          ) : null}
+        </div>
+      </section>
+
       <Section title={t('enrollment')}>
         <p className="mb-3 text-sm text-muted-foreground">{t('chooseCategory')}</p>
         <div className="grid grid-cols-4 gap-2">
