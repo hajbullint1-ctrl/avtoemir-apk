@@ -82,6 +82,7 @@ type Store = {
   cancelBooking: (id: string) => void
   results: TestResult[]
   addResult: (score: number, total: number) => void
+  clearResults: () => void
   learnedSigns: string[]
   toggleSign: (id: string, known: boolean) => void
   roadSigns: RoadSign[]
@@ -318,68 +319,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     students,
     me,
     setCategory: (c) => updateStudent(me.id, (s) => ({ ...s, category: c })),
-    setDoc: (key, file) => {
-      const id = session?.accountId || me.id
-      if (!id || id === 'guest') return
-      setStudents((list) => {
-        const emptyDocs = { idFront: null, idBack: null, psycho: null, narco: null }
-        const idx = list.findIndex((s) => s.id === id)
-        let next: Student[]
-        if (idx < 0) {
-          next = [
-            ...list.filter((s) => s.id !== 'me'),
-            {
-              id,
-              name: session?.fullName || me.name || '',
-              phone: session?.phone || me.phone || '',
-              category: me.category || 'B',
-              docs: { ...emptyDocs, [key]: file },
-              status: 'draft',
-              readyDate: null,
-              submittedAt: null,
-            },
-          ]
-        } else {
-          next = list.map((s) =>
-            s.id === id ? { ...s, docs: { ...s.docs, [key]: file } } : s,
-          )
-        }
-        void saveSharedKey('students', next)
-        return next
-      })
-    },
-    submitDocs: () => {
-      const id = session?.accountId || me.id
-      if (!id || id === 'guest') return
-      setStudents((list) => {
-        const emptyDocs = { idFront: null, idBack: null, psycho: null, narco: null }
-        const idx = list.findIndex((s) => s.id === id)
-        let next: Student[]
-        if (idx < 0) {
-          next = [
-            ...list.filter((s) => s.id !== 'me'),
-            {
-              id,
-              name: session?.fullName || me.name || '',
-              phone: session?.phone || me.phone || '',
-              category: me.category || 'B',
-              docs: me.docs || emptyDocs,
-              status: 'pending',
-              readyDate: null,
-              submittedAt: nowStamp(),
-            },
-          ]
-        } else {
-          next = list.map((s) =>
-            s.id === id ? { ...s, status: 'pending' as const, submittedAt: nowStamp() } : s,
-          )
-        }
-        void saveSharedKey('students', next)
-        return next
-      })
-    },
+    setDoc: (key, file) => updateStudent(me.id, (s) => ({ ...s, docs: { ...s.docs, [key]: file } })),
+    submitDocs: () => updateStudent(me.id, (s) => ({ ...s, status: 'pending', submittedAt: nowStamp() })),
     approveStudent: (id, readyDate) => updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate })),
-    rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected' })),
+    rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected', readyDate: null })),
     resetStudentDocs: (id) =>
       updateStudent(id, (s) => ({
         ...s,
@@ -488,8 +431,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addBooking: (b) => setBookings((list) => [...list, { ...b, id: uid() }]),
     cancelBooking: (id) => setBookings((list) => list.filter((x) => x.id !== id)),
     results,
-    addResult: (score, total) =>
-      setResults((list) => [...list, { id: uid(), score, total, date: nowStamp() }]),
+    addResult: (score, total) => {
+      const item = {
+        id: uid(),
+        score,
+        total,
+        date: nowStamp(),
+        studentId: session?.accountId || me.id,
+        studentName: me.name || session?.fullName || '',
+      }
+      setResults((list) => {
+        const next = [...list, item].slice(-400)
+        void saveSharedKey('results', next)
+        return next
+      })
+    },
+    clearResults: () => {
+      setResults([])
+      void saveSharedKey('results', [])
+    },
     learnedSigns,
     toggleSign: (id, known) =>
       setLearnedSigns((list) => (known ? [...new Set([...list, id])] : list.filter((x) => x !== id))),
