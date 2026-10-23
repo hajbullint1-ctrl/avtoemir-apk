@@ -9,6 +9,7 @@ import { AdminNotifications } from './admin-notifications'
 import { AdminMessages } from './admin-messages'
 import { AdminInstructorChat } from './admin-instructor-chat'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor, RoadSignsEditor } from './admin-content'
+import { AdminTestResults } from './admin-test-results'
 import { useStore } from '@/lib/store'
 import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
 import type { L } from '@/lib/i18n'
@@ -24,6 +25,7 @@ const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JS
   { id: 'theory', label: { ru: 'Теория', kk: 'Теория' }, icon: BookOpen, Comp: TheoryEditor },
   { id: 'road-signs', label: { ru: 'Дорожные знаки', kk: 'Жол белгілері' }, icon: Signpost, Comp: RoadSignsEditor },
   { id: 'tests', label: { ru: 'Тесты', kk: 'Тесттер' }, icon: ClipboardCheck, Comp: QuestionsEditor },
+  { id: 'test-history', label: { ru: 'История тестов', kk: 'Тесттер тарихы' }, icon: ClipboardCheck, Comp: AdminTestResults },
   { id: 'instructors', label: { ru: 'Инструкторы', kk: 'Нұсқаушылар' }, icon: Car, Comp: InstructorsEditor },
   { id: 'reviews', label: { ru: 'Отзывы', kk: 'Пікірлер' }, icon: MessageSquareText, Comp: ReviewsEditor },
 ]
