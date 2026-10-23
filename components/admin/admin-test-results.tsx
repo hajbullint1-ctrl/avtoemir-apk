@@ -2,11 +2,22 @@
 
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
+import { saveSharedKey } from '@/lib/sync'
 import { cn } from '@/lib/utils'
 
 /** Shared test history — one list, student name next to date (minimal load). */
 export function AdminTestResults() {
-  const { results, clearResults, tl } = useStore()
+  const store = useStore()
+  const { results, tl } = store
+  const clearResults =
+    'clearResults' in store && typeof (store as { clearResults?: () => void }).clearResults === 'function'
+      ? () => {
+          ;(store as { clearResults: () => void }).clearResults()
+        }
+      : () => {
+          void saveSharedKey('results', [])
+          window.location.reload()
+        }
   const sorted = [...results].reverse()
 
   return (
@@ -50,11 +61,12 @@ export function AdminTestResults() {
             const when = r.date.includes('-')
               ? r.date.replace('T', ' ').slice(0, 16)
               : r.date
+            const name = (r as { studentName?: string }).studentName
             return (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">
-                    {r.studentName || tl({ ru: 'Ученик', kk: 'Оқушы' })}
+                    {name || tl({ ru: 'Ученик', kk: 'Оқушы' })}
                   </div>
                   <div className="text-xs text-muted-foreground">{when}</div>
                 </div>
