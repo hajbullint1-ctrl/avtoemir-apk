@@ -50,7 +50,7 @@ function normalizeInstructors(list: Instructor[]): Instructor[] {
 
 function isLegacyDemoStudent(s: Student): boolean {
   const n = (s.name || '').toLowerCase()
-  return s.id === 'me' || n.includes('\u0430\u0439\u0434\u0430\u043d\u0430') || n.includes('aidana')
+  return s.id === 'me' || n.includes('aidana')
 }
 
 export function mergeById<T extends { id: string; imageUrl?: string | null }>(a: T[], b: T[]): T[] {
@@ -83,6 +83,16 @@ function preferDoc(
   return score(a) >= score(b) ? (a ?? null) : (b ?? null)
 }
 
+function hasAnyDoc(s: Student): boolean {
+  const d = s.docs
+  return !!(d?.idFront?.url || d?.idBack?.url || d?.psycho?.url || d?.narco?.url)
+}
+
+/** Admin/student reset: draft + no submittedAt + no files = intentional clear (must win over old cloud files). */
+function isDocsReset(s: Student): boolean {
+  return s.status === 'draft' && !s.submittedAt && !hasAnyDoc(s)
+}
+
 export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []): Student[] {
   const ban = new Set(['me', ...deleted])
   const map = new Map<string, Student>()
@@ -102,21 +112,39 @@ export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []
         })
         continue
       }
-      const docs = {
-        idFront: preferDoc(s.docs?.idFront, prev.docs?.idFront),
-        idBack: preferDoc(s.docs?.idBack, prev.docs?.idBack),
-        psycho: preferDoc(s.docs?.psycho, prev.docs?.psycho),
-        narco: preferDoc(s.docs?.narco, prev.docs?.narco),
+
+      let docs: Student['docs']
+      if (isDocsReset(s)) {
+        docs = { idFront: null, idBack: null, psycho: null, narco: null }
+      } else if (isDocsReset(prev) && !hasAnyDoc(s)) {
+        docs = { idFront: null, idBack: null, psycho: null, narco: null }
+      } else {
+        docs = {
+          idFront: preferDoc(s.docs?.idFront, prev.docs?.idFront),
+          idBack: preferDoc(s.docs?.idBack, prev.docs?.idBack),
+          psycho: preferDoc(s.docs?.psycho, prev.docs?.psycho),
+          narco: preferDoc(s.docs?.narco, prev.docs?.narco),
+        }
       }
+
       const rankS = STATUS_RANK[s.status] ?? 0
       const rankP = STATUS_RANK[prev.status] ?? 0
+      let status = rankS >= rankP ? s.status : prev.status
+      let submittedAt = s.submittedAt || prev.submittedAt
+      let readyDate = s.readyDate || prev.readyDate
+      if (isDocsReset(s)) {
+        status = 'draft'
+        submittedAt = null
+        readyDate = null
+      }
+
       map.set(s.id, {
         ...prev,
         ...s,
         docs,
-        readyDate: s.readyDate || prev.readyDate,
-        submittedAt: s.submittedAt || prev.submittedAt,
-        status: rankS >= rankP ? s.status : prev.status,
+        readyDate,
+        submittedAt,
+        status,
         name: s.name || prev.name,
         phone: s.phone || prev.phone,
         category: s.category || prev.category,
@@ -271,7 +299,6 @@ export async function loadMessagesBundle(): Promise<{ messages: Message[]; dropp
   }
 }
 
-/** Drop blob: and huge data: URLs so app_state stays small. Keep https Storage URLs. */
 function sanitizeStudentsForCloud(list: unknown): unknown {
   if (!Array.isArray(list)) return list
   return list.map((raw) => {
