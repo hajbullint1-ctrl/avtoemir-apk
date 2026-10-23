@@ -70,14 +70,13 @@ function readFile(file: File): Promise<string> {
   })
 }
 
-/** Shrink ID photos so they survive sync if Storage is unavailable. */
-function compressImage(file: File): Promise<string> {
+/** Shrink phone photos so upload + sync stay reliable on mobile. */
+function compressImage(file: File, maxSide = 1280, quality = 0.7): Promise<string> {
   return new Promise((resolve, reject) => {
     const blobUrl = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
-      const max = 1600
-      const scale = Math.min(1, max / Math.max(img.width, img.height))
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
       const width = Math.max(1, Math.round(img.width * scale))
       const height = Math.max(1, Math.round(img.height * scale))
       const canvas = document.createElement('canvas')
@@ -91,7 +90,7 @@ function compressImage(file: File): Promise<string> {
       }
       ctx.drawImage(img, 0, 0, width, height)
       URL.revokeObjectURL(blobUrl)
-      resolve(canvas.toDataURL('image/jpeg', 0.72))
+      resolve(canvas.toDataURL('image/jpeg', quality))
     }
     img.onerror = () => {
       URL.revokeObjectURL(blobUrl)
@@ -110,6 +109,15 @@ async function durableFileUrl(file: File): Promise<string> {
     }
   }
   return readFile(file)
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, body] = dataUrl.split(',')
+  const mime = /data:([^;]+)/.exec(head)?.[1] || 'image/jpeg'
+  const bin = atob(body)
+  const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+  return new Blob([arr], { type: mime })
 }
 
 /** Upload a theory lesson card to the public `theory-cards` bucket. Falls back to a data URL. */
@@ -132,16 +140,34 @@ export async function uploadTheoryCard(file: File): Promise<string> {
   return data.publicUrl
 }
 
-/** Upload a student document so the admin can open it on another device. */
+/**
+ * Upload student document for admin on other devices.
+ * Phone photos are compressed first (avoids multi-MB failures).
+ */
 export async function uploadStudentDocument(studentId: string, docKey: string, file: File): Promise<string> {
   const sb = getSupabase()
+  let body: Blob | File = file
+  let contentType = file.type || 'application/octet-stream'
+  let safe = (file.name || 'doc').replace(/[^a-zA-Z0-9._-]/g, '') || 'doc'
+
+  if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+    try {
+      const dataUrl = await compressImage(file, 1280, 0.7)
+      body = dataUrlToBlob(dataUrl)
+      contentType = 'image/jpeg'
+      safe = safe.replace(/\.[^.]+$/, '') + '.jpg'
+    } catch {
+      /* keep original */
+    }
+  }
+
   if (!sb) return durableFileUrl(file)
-  const safe = (file.name || 'doc').replace(/[^a-zA-Z0-9._-]/g, '') || 'doc'
+
   const path = `${studentId || 'student'}/${docKey}-${Date.now()}-${safe}`
-  const { error } = await sb.storage.from('student-docs').upload(path, file, {
+  const { error } = await sb.storage.from('student-docs').upload(path, body, {
     cacheControl: '3600',
-    upsert: false,
-    contentType: file.type || 'application/octet-stream',
+    upsert: true,
+    contentType,
   })
   if (error) {
     console.warn('[storage] student-docs', error.message)
