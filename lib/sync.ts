@@ -50,7 +50,7 @@ function normalizeInstructors(list: Instructor[]): Instructor[] {
 
 function isLegacyDemoStudent(s: Student): boolean {
   const n = (s.name || '').toLowerCase()
-  return s.id === 'me' || n.includes('айдана') || n.includes('aidana')
+  return s.id === 'me' || n.includes('\u0430\u0439\u0434\u0430\u043d\u0430') || n.includes('aidana')
 }
 
 export function mergeById<T extends { id: string; imageUrl?: string | null }>(a: T[], b: T[]): T[] {
@@ -69,6 +69,20 @@ export function mergeById<T extends { id: string; imageUrl?: string | null }>(a:
 
 const STATUS_RANK: Record<string, number> = { draft: 0, pending: 1, rejected: 1, approved: 2 }
 
+function preferDoc(
+  a: Student['docs'][keyof Student['docs']] | null | undefined,
+  b: Student['docs'][keyof Student['docs']] | null | undefined,
+): Student['docs'][keyof Student['docs']] | null {
+  const score = (d: typeof a) => {
+    if (!d?.url) return 0
+    if (d.url.startsWith('http')) return 3
+    if (d.url.startsWith('data:')) return 2
+    if (d.url.startsWith('blob:')) return 1
+    return 0
+  }
+  return score(a) >= score(b) ? (a ?? null) : (b ?? null)
+}
+
 export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []): Student[] {
   const ban = new Set(['me', ...deleted])
   const map = new Map<string, Student>()
@@ -76,15 +90,30 @@ export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []
     for (const s of list) {
       if (!s?.id || ban.has(s.id) || isLegacyDemoStudent(s)) continue
       const prev = map.get(s.id)
-      if (!prev) { map.set(s.id, s); continue }
-      const docs = { ...prev.docs }
-      for (const k of Object.keys(s.docs || {}) as (keyof Student['docs'])[]) {
-        if (s.docs[k]) docs[k] = s.docs[k]
+      if (!prev) {
+        map.set(s.id, {
+          ...s,
+          docs: {
+            idFront: s.docs?.idFront ?? null,
+            idBack: s.docs?.idBack ?? null,
+            psycho: s.docs?.psycho ?? null,
+            narco: s.docs?.narco ?? null,
+          },
+        })
+        continue
+      }
+      const docs = {
+        idFront: preferDoc(s.docs?.idFront, prev.docs?.idFront),
+        idBack: preferDoc(s.docs?.idBack, prev.docs?.idBack),
+        psycho: preferDoc(s.docs?.psycho, prev.docs?.psycho),
+        narco: preferDoc(s.docs?.narco, prev.docs?.narco),
       }
       const rankS = STATUS_RANK[s.status] ?? 0
       const rankP = STATUS_RANK[prev.status] ?? 0
       map.set(s.id, {
-        ...prev, ...s, docs,
+        ...prev,
+        ...s,
+        docs,
         readyDate: s.readyDate || prev.readyDate,
         submittedAt: s.submittedAt || prev.submittedAt,
         status: rankS >= rankP ? s.status : prev.status,
@@ -242,12 +271,38 @@ export async function loadMessagesBundle(): Promise<{ messages: Message[]; dropp
   }
 }
 
+/** Drop blob: and huge data: URLs so app_state stays small. Keep https Storage URLs. */
+function sanitizeStudentsForCloud(list: unknown): unknown {
+  if (!Array.isArray(list)) return list
+  return list.map((raw) => {
+    const s = raw as Student
+    if (!s || typeof s !== 'object') return raw
+    const docsIn = s.docs || ({} as Student['docs'])
+    const clean = (d: Student['docs'][keyof Student['docs']] | null | undefined) => {
+      if (!d?.url) return null
+      if (d.url.startsWith('http')) return d
+      if (d.url.startsWith('data:') && d.url.length < 400_000) return d
+      return null
+    }
+    return {
+      ...s,
+      docs: {
+        idFront: clean(docsIn.idFront),
+        idBack: clean(docsIn.idBack),
+        psycho: clean(docsIn.psycho),
+        narco: clean(docsIn.narco),
+      },
+    }
+  })
+}
+
 export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
   const sb = getSupabase()
   if (!sb) return false
   try {
+    const payload = key === 'students' ? sanitizeStudentsForCloud(data) : data
     const { error } = await sb.from('app_state').upsert(
-      { key, data, updated_at: new Date().toISOString() },
+      { key, data: payload, updated_at: new Date().toISOString() },
       { onConflict: 'key' },
     )
     if (error) { console.warn(`[sync] save ${key}:`, error.message); return false }
