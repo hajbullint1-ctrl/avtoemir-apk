@@ -115,6 +115,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [theoryProgress, setTheoryProgress] = useState<Record<string, string[]>>({})
   const [presence, setPresence] = useState<Record<string, string>>({})
   const [maintenanceMode, setMaintenanceModeState] = useState(false)
+  const resultsIgnoreUntil = useRef(0)
 
   useEffect(() => {
     setSession(loadSession())
@@ -186,11 +187,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void saveSharedToCloud({
         school, instructors, notices, students, theory, questions, reviews,
         bookings, accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
-        results, learnedSigns, profiles, theoryProgress, roadSigns,
+        learnedSigns, profiles, theoryProgress, roadSigns,
       })
     }, 1200)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, bookings, learnedSigns, profiles, theoryProgress, roadSigns])
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
@@ -215,7 +216,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud.notices) setNotices(cloud.notices)
       if (cloud.messages) setMessages(cloud.messages)
       if (cloud.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
-      if (Array.isArray(cloud.results)) setResults(cloud.results)
+      if (Array.isArray(cloud.results) && Date.now() > resultsIgnoreUntil.current) {
+        setResults(cloud.results)
+      }
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
     }
     const id = setInterval(pull, 15000)
@@ -483,6 +486,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     clearResults: () => {
       setResults([])
+      resultsIgnoreUntil.current = Date.now() + 60_000
+      try {
+        const raw = localStorage.getItem('avtoemir.store.v2')
+        if (raw) {
+          const p = JSON.parse(raw) as Record<string, unknown>
+          p.results = []
+          localStorage.setItem('avtoemir.store.v2', JSON.stringify(p))
+        }
+      } catch { /* ignore */ }
       void forceSaveResults([])
     },
     learnedSigns,
