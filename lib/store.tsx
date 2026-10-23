@@ -246,7 +246,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     session,
     login: async (phone, password) => {
       const r = await loginAccount(phone, password)
-      if (r.ok) setSession(r.session)
+      if (r.ok) {
+        setSession(r.session)
+        setStudents((list) => {
+          if (list.some((s) => s.id === r.session.accountId)) return list
+          const student: Student = {
+            id: r.session.accountId,
+            name: r.session.fullName,
+            phone: r.session.phone,
+            category: 'B',
+            docs: { idFront: null, idBack: null, psycho: null, narco: null },
+            status: 'draft',
+            readyDate: null,
+            submittedAt: null,
+          }
+          const next = [...list.filter((s) => s.id !== 'me'), student]
+          void saveSharedKey('students', next)
+          return next
+        })
+      }
       return r.ok ? { ok: true } : { ok: false, error: r.error }
     },
     register: async (fullName, phone, password) => {
@@ -300,8 +318,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     students,
     me,
     setCategory: (c) => updateStudent(me.id, (s) => ({ ...s, category: c })),
-    setDoc: (key, file) => updateStudent(me.id, (s) => ({ ...s, docs: { ...s.docs, [key]: file } })),
-    submitDocs: () => updateStudent(me.id, (s) => ({ ...s, status: 'pending', submittedAt: nowStamp() })),
+    setDoc: (key, file) => {
+      const id = session?.accountId || me.id
+      if (!id || id === 'guest') return
+      setStudents((list) => {
+        const emptyDocs = { idFront: null, idBack: null, psycho: null, narco: null }
+        const idx = list.findIndex((s) => s.id === id)
+        let next: Student[]
+        if (idx < 0) {
+          next = [
+            ...list.filter((s) => s.id !== 'me'),
+            {
+              id,
+              name: session?.fullName || me.name || '',
+              phone: session?.phone || me.phone || '',
+              category: me.category || 'B',
+              docs: { ...emptyDocs, [key]: file },
+              status: 'draft',
+              readyDate: null,
+              submittedAt: null,
+            },
+          ]
+        } else {
+          next = list.map((s) =>
+            s.id === id ? { ...s, docs: { ...s.docs, [key]: file } } : s,
+          )
+        }
+        void saveSharedKey('students', next)
+        return next
+      })
+    },
+    submitDocs: () => {
+      const id = session?.accountId || me.id
+      if (!id || id === 'guest') return
+      setStudents((list) => {
+        const emptyDocs = { idFront: null, idBack: null, psycho: null, narco: null }
+        const idx = list.findIndex((s) => s.id === id)
+        let next: Student[]
+        if (idx < 0) {
+          next = [
+            ...list.filter((s) => s.id !== 'me'),
+            {
+              id,
+              name: session?.fullName || me.name || '',
+              phone: session?.phone || me.phone || '',
+              category: me.category || 'B',
+              docs: me.docs || emptyDocs,
+              status: 'pending',
+              readyDate: null,
+              submittedAt: nowStamp(),
+            },
+          ]
+        } else {
+          next = list.map((s) =>
+            s.id === id ? { ...s, status: 'pending' as const, submittedAt: nowStamp() } : s,
+          )
+        }
+        void saveSharedKey('students', next)
+        return next
+      })
+    },
     approveStudent: (id, readyDate) => updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate })),
     rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected' })),
     resetStudentDocs: (id) =>
