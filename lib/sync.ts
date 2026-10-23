@@ -67,7 +67,8 @@ export function mergeById<T extends { id: string; imageUrl?: string | null }>(a:
   return [...map.values()]
 }
 
-const STATUS_RANK: Record<string, number> = { draft: 0, pending: 1, rejected: 1, approved: 2 }
+// rejected > pending so admin reject is not overwritten by stale pending from cloud
+const STATUS_RANK: Record<string, number> = { draft: 0, pending: 1, rejected: 2, approved: 3 }
 
 function preferDoc(
   a: Student['docs'][keyof Student['docs']] | null | undefined,
@@ -88,12 +89,16 @@ function hasAnyDoc(s: Student): boolean {
   return !!(d?.idFront?.url || d?.idBack?.url || d?.psycho?.url || d?.narco?.url)
 }
 
-/** Admin/student reset: draft + no submittedAt + no files = intentional clear (must win over old cloud files). */
 function isDocsReset(s: Student): boolean {
   return s.status === 'draft' && !s.submittedAt && !hasAnyDoc(s)
 }
 
-export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []): Student[] {
+export function mergeStudents(
+  a: Student[],
+  b: Student[],
+  deleted: string[] = [],
+  preferSecondStatus = false,
+): Student[] {
   const ban = new Set(['me', ...deleted])
   const map = new Map<string, Student>()
   for (const list of [a, b]) {
@@ -129,9 +134,16 @@ export function mergeStudents(a: Student[], b: Student[], deleted: string[] = []
 
       const rankS = STATUS_RANK[s.status] ?? 0
       const rankP = STATUS_RANK[prev.status] ?? 0
-      let status = rankS >= rankP ? s.status : prev.status
+      let status: Student['status']
+      if (rankS > rankP) status = s.status
+      else if (rankS < rankP) status = prev.status
+      else status = preferSecondStatus ? s.status : prev.status
       let submittedAt = s.submittedAt || prev.submittedAt
       let readyDate = s.readyDate || prev.readyDate
+      if (s.status === 'rejected' && preferSecondStatus) {
+        status = 'rejected'
+        readyDate = null
+      }
       if (isDocsReset(s)) {
         status = 'draft'
         submittedAt = null
@@ -345,7 +357,7 @@ export async function saveMergedById<T extends { id: string }>(key: SharedKey, l
   const remote = (cloud?.[key as keyof SharedSlice] as T[] | undefined) || []
   const merged =
     key === 'students'
-      ? (mergeStudents(remote as unknown as Student[], local as unknown as Student[]) as unknown as T[])
+      ? (mergeStudents(remote as unknown as Student[], local as unknown as Student[], [], true) as unknown as T[])
       : mergeById(remote as T[], local)
   await saveSharedKey(key, merged)
   return merged
