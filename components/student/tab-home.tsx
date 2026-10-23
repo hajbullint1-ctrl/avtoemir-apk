@@ -22,16 +22,21 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
   const { me, setDoc, t, tl } = useStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
   const file = me.docs[docKey]
-  const locked = me.status === 'pending' || me.status === 'approved'
+  // Only approved is locked; draft / rejected / pending can still upload or replace
+  const locked = me.status === 'approved'
   const isImage = file && !file.name.toLowerCase().endsWith('.pdf')
 
   return (
     <div className="flex flex-col gap-2">
       <button
         type="button"
-        disabled={locked}
-        onClick={() => inputRef.current?.click()}
+        disabled={locked || busy}
+        onClick={() => {
+          setErr(null)
+          inputRef.current?.click()
+        }}
         className={cn(
           'relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed bg-muted/60 text-muted-foreground transition-colors',
           !locked && 'hover:border-primary hover:text-primary',
@@ -61,22 +66,34 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
         )}
       </button>
       <p className="text-center text-xs font-medium text-muted-foreground">{label}</p>
+      {err && <p className="text-center text-[11px] leading-tight text-destructive">{err}</p>}
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/*,image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         disabled={locked || busy}
         onChange={async (e) => {
           const f = e.target.files?.[0]
+          e.target.value = ''
           if (!f) return
           setBusy(true)
+          setErr(null)
           try {
+            if (f.size > 25 * 1024 * 1024) {
+              setErr(tl({ ru: 'Файл слишком большой (макс. 25 МБ)', kk: 'Файл тым үлкен (макс. 25 МБ)' }))
+              return
+            }
             const url = await uploadStudentDocument(me.id, docKey, f)
-            setDoc(docKey, { name: f.name, url })
+            const name = f.type.startsWith('image/') ? f.name.replace(/\.[^.]+$/, '') + '.jpg' : f.name
+            setDoc(docKey, { name, url })
           } catch {
-            const url = URL.createObjectURL(f)
-            setDoc(docKey, { name: f.name, url })
+            setErr(
+              tl({
+                ru: 'Не удалось загрузить. Разрешите доступ к фото и попробуйте снова.',
+                kk: 'Жүктеу сәтсіз. Фотоға рұқсат беріңіз де, қайталап көріңіз.',
+              }),
+            )
           } finally {
             setBusy(false)
           }
