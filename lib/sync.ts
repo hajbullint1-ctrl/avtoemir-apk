@@ -118,9 +118,7 @@ export function mergeStudents(
       }
 
       let docs: Student['docs']
-      if (isDocsReset(s)) {
-        docs = { idFront: null, idBack: null, psycho: null, narco: null }
-      } else if (isDocsReset(prev)) {
+      if (isDocsReset(s) || isDocsReset(prev)) {
         docs = { idFront: null, idBack: null, psycho: null, narco: null }
       } else {
         docs = {
@@ -144,11 +142,9 @@ export function mergeStudents(
         readyDate = null
       }
       if (isDocsReset(s) || isDocsReset(prev)) {
-        if (isDocsReset(s) || isDocsReset(prev)) {
-          status = 'draft'
-          submittedAt = null
-          readyDate = null
-        }
+        status = 'draft'
+        submittedAt = null
+        readyDate = null
       }
 
       map.set(s.id, {
@@ -353,7 +349,6 @@ export async function saveSharedKey(key: SharedKey, data: unknown): Promise<bool
   }
 }
 
-/** Local student fully overwrites same id in cloud (docs/status). */
 export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]> {
   const cloud = await loadSharedKeys(['students'])
   const remote = (cloud?.students || []) as Student[]
@@ -385,7 +380,7 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
   return merged
 }
 
-/** Overwrite results list (including empty — used by admin clear). */
+/** Overwrite results (including empty). Never called from batch debounce. */
 export async function forceSaveResults(list: TestResult[]): Promise<void> {
   await saveSharedKey('results', list)
 }
@@ -425,7 +420,7 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.bookings) tasks.push(saveMergedById('bookings', slice.bookings))
   if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
   if (slice.recovery) tasks.push(saveSharedKey('recovery', slice.recovery))
-  if (slice.results !== undefined) tasks.push(saveSharedKey('results', slice.results))
+  // results: ONLY forceSaveResults / addResult — batch debounce was restoring cleared history
   if (slice.learnedSigns) {
     tasks.push((async () => {
       const cloud = await loadSharedKeys(['learnedSigns'])
