@@ -70,8 +70,7 @@ function readFile(file: File): Promise<string> {
   })
 }
 
-/** Shrink phone photos so upload + sync stay reliable on mobile. */
-function compressImage(file: File, maxSide = 1280, quality = 0.7): Promise<string> {
+function compressImage(file: File, maxSide = 960, quality = 0.6): Promise<string> {
   return new Promise((resolve, reject) => {
     const blobUrl = URL.createObjectURL(file)
     const img = new Image()
@@ -120,7 +119,6 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([arr], { type: mime })
 }
 
-/** Upload a theory lesson card to the public `theory-cards` bucket. Falls back to a data URL. */
 export async function uploadTheoryCard(file: File): Promise<string> {
   const sb = getSupabase()
   if (!sb) return readFile(file)
@@ -140,40 +138,51 @@ export async function uploadTheoryCard(file: File): Promise<string> {
   return data.publicUrl
 }
 
-/**
- * Upload student document for admin on other devices.
- * Phone photos are compressed first (avoids multi-MB failures).
- */
+/** Compress → /api/upload-doc → Storage. Falls back to data URL only if all fail. */
 export async function uploadStudentDocument(studentId: string, docKey: string, file: File): Promise<string> {
-  const sb = getSupabase()
   let body: Blob | File = file
-  let contentType = file.type || 'application/octet-stream'
-  let safe = (file.name || 'doc').replace(/[^a-zA-Z0-9._-]/g, '') || 'doc'
-
-  if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+  let filename = file.name || 'doc.jpg'
+  if (file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || '')) {
     try {
-      const dataUrl = await compressImage(file, 1280, 0.7)
+      const dataUrl = await compressImage(file, 960, 0.6)
       body = dataUrlToBlob(dataUrl)
-      contentType = 'image/jpeg'
-      safe = safe.replace(/\.[^.]+$/, '') + '.jpg'
+      filename = (file.name || 'doc').replace(/\.[^.]+$/, '') + '.jpg'
     } catch {
       /* keep original */
     }
   }
 
-  if (!sb) return durableFileUrl(file)
-
-  const path = `${studentId || 'student'}/${docKey}-${Date.now()}-${safe}`
-  const { error } = await sb.storage.from('student-docs').upload(path, body, {
-    cacheControl: '3600',
-    upsert: true,
-    contentType,
-  })
-  if (error) {
-    console.warn('[storage] student-docs', error.message)
-    return durableFileUrl(file)
+  try {
+    const fd = new FormData()
+    fd.append('studentId', studentId || 'student')
+    fd.append('docKey', docKey)
+    fd.append('file', body, filename)
+    const res = await fetch('/api/upload-doc', { method: 'POST', body: fd })
+    const json = await res.json().catch(() => ({}))
+    if (res.ok && json?.ok && typeof json.url === 'string' && json.url.startsWith('http')) {
+      return json.url as string
+    }
+    console.warn('[upload] api failed', json?.error || res.status)
+  } catch (e) {
+    console.warn('[upload] api exception', e)
   }
-  const { data } = sb.storage.from('student-docs').getPublicUrl(path)
-  if (!data?.publicUrl) return durableFileUrl(file)
-  return data.publicUrl
+
+  const sb = getSupabase()
+  if (sb) {
+    const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '') || 'doc.jpg'
+    const path = `${studentId || 'student'}/${docKey}-${Date.now()}-${safe}`
+    const { error } = await sb.storage.from('student-docs').upload(path, body, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: body.type || 'image/jpeg',
+    })
+    if (!error) {
+      const { data } = sb.storage.from('student-docs').getPublicUrl(path)
+      if (data?.publicUrl) return data.publicUrl
+    } else {
+      console.warn('[storage] student-docs', error.message)
+    }
+  }
+
+  return durableFileUrl(file)
 }
