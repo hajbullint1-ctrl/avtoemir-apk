@@ -19,6 +19,9 @@ export type Student = {
   submittedAt: string | null
   /** ISO timestamp — last local write wins on sync */
   updatedAt?: string
+  /** Hidden from main student list; kept in cloud for history */
+  archived?: boolean
+  archivedAt?: string | null
 }
 
 export type Branch = { id: string; city: L; address: L; link: string }
