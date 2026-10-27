@@ -1,1 +1,489 @@
-PLACEHOLDER
+/**
+ * Sync shared app state with Supabase (app_state table).
+ * Content arrays are merged by id so a short client never wipes the cloud.
+ */
+
+import { getSupabase, isSupabaseConfigured } from './supabase'
+import type {
+  Booking, Instructor, Message, Notice, Question, Review, School, Student, TestResult, TheoryTopic, RoadSign,
+} from './data'
+import type { Account, PasswordRecoveryRequest } from './auth'
+import type { ProfileRow } from './cloud-features'
+
+export type SharedSlice = {
+  school?: School
+  instructors?: Instructor[]
+  notices?: Notice[]
+  students?: Student[]
+  theory?: TheoryTopic[]
+  questions?: Question[]
+  reviews?: Review[]
+  messages?: Message[]
+  bookings?: Booking[]
+  accounts?: Account[]
+  recovery?: PasswordRecoveryRequest[]
+  results?: TestResult[]
+  learnedSigns?: string[]
+  profiles?: ProfileRow[]
+  theoryProgress?: Record<string, string[]>
+  roadSigns?: RoadSign[]
+  presence?: Record<string, string>
+  droppedMessageIds?: string[]
+  studentMistakes?: Record<string, string[]>
+  deletedStudentIds?: string[]
+  deletedAccountIds?: string[]
+  maintenanceMode?: boolean
+}
+
+const KEYS = [
+  'school', 'instructors', 'notices', 'students', 'theory', 'questions', 'reviews',
+  'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
+  'theoryProgress', 'roadSigns', 'presence', 'droppedMessageIds', 'studentMistakes',
+  'deletedStudentIds', 'deletedAccountIds', 'maintenanceMode',
+] as const
+
+export type SharedKey = (typeof KEYS)[number]
+
+function normalizeInstructors(list: Instructor[]): Instructor[] {
+  return list.map((i) => ({ ...i, phone: typeof i.phone === 'string' ? i.phone : '' }))
+}
+
+function isLegacyDemoStudent(s: Student): boolean {
+  const n = (s.name || '').toLowerCase()
+  return s.id === 'me' || n.includes('aidana')
+}
+
+export function mergeById<T extends { id: string; imageUrl?: string | null }>(a: T[], b: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const list of [a, b]) {
+    for (const item of list) {
+      if (!item?.id) continue
+      const prev = map.get(item.id)
+      if (!prev) { map.set(item.id, item); continue }
+      const imageUrl = item.imageUrl || prev.imageUrl || null
+      map.set(item.id, { ...prev, ...item, imageUrl })
+    }
+  }
+  return [...map.values()]
+}
+
+const STATUS_RANK: Record<string, number> = { draft: 0, pending: 1, rejected: 2, approved: 3 }
+
+function preferDoc(
+  a: Student['docs'][keyof Student['docs']] | null | undefined,
+  b: Student['docs'][keyof Student['docs']] | null | undefined,
+): Student['docs'][keyof Student['docs']] | null {
+  const score = (d: typeof a) => {
+    if (!d?.url) return 0
+    if (d.url.startsWith('http')) return 3
+    if (d.url.startsWith('data:')) return 2
+    if (d.url.startsWith('blob:')) return 1
+    return 0
+  }
+  return score(a) >= score(b) ? (a ?? null) : (b ?? null)
+}
+
+function hasAnyDoc(s: Student): boolean {
+  const d = s.docs
+  return !!(d?.idFront?.url || d?.idBack?.url || d?.psycho?.url || d?.narco?.url)
+}
+
+function isDocsReset(s: Student): boolean {
+  return s.status === 'draft' && !s.submittedAt && !hasAnyDoc(s)
+}
+
+export function mergeStudents(
+  a: Student[],
+  b: Student[],
+  deleted: string[] = [],
+  preferSecondStatus = false,
+): Student[] {
+  const ban = new Set(['me', ...deleted])
+  const map = new Map<string, Student>()
+  for (const list of [a, b]) {
+    for (const s of list) {
+      if (!s?.id || ban.has(s.id) || isLegacyDemoStudent(s)) continue
+      const prev = map.get(s.id)
+      if (!prev) {
+        map.set(s.id, {
+          ...s,
+          docs: {
+            idFront: s.docs?.idFront ?? null,
+            idBack: s.docs?.idBack ?? null,
+            psycho: s.docs?.psycho ?? null,
+            narco: s.docs?.narco ?? null,
+          },
+        })
+        continue
+      }
+
+      const rankS = STATUS_RANK[s.status] ?? 0
+      const rankP = STATUS_RANK[prev.status] ?? 0
+      const sIsReset = isDocsReset(s)
+      const intentionalEmpty =
+        sIsReset &&
+        (preferSecondStatus || rankP >= 1)
+
+      let docs: Student['docs']
+      if (intentionalEmpty) {
+        docs = { idFront: null, idBack: null, psycho: null, narco: null }
+      } else {
+        docs = {
+          idFront: preferDoc(s.docs?.idFront, prev.docs?.idFront),
+          idBack: preferDoc(s.docs?.idBack, prev.docs?.idBack),
+          psycho: preferDoc(s.docs?.psycho, prev.docs?.psycho),
+          narco: preferDoc(s.docs?.narco, prev.docs?.narco),
+        }
+      }
+
+      let status: Student['status']
+      if (intentionalEmpty) {
+        status = 'draft'
+      } else if (rankS > rankP) status = s.status
+      else if (rankS < rankP) status = prev.status
+      else status = preferSecondStatus ? s.status : prev.status
+
+      let submittedAt = intentionalEmpty ? null : (s.submittedAt || prev.submittedAt)
+      let readyDate = intentionalEmpty ? null : (s.readyDate || prev.readyDate)
+      if (s.status === 'rejected' && preferSecondStatus) {
+        status = 'rejected'
+        readyDate = null
+      }
+
+      const tS = Date.parse(s.updatedAt || '') || 0
+      const tP = Date.parse(prev.updatedAt || '') || 0
+      if (tS > tP && tS > 0) {
+        docs = {
+          idFront: s.docs?.idFront ?? null,
+          idBack: s.docs?.idBack ?? null,
+          psycho: s.docs?.psycho ?? null,
+          narco: s.docs?.narco ?? null,
+        }
+        status = s.status
+        submittedAt = s.submittedAt ?? null
+        readyDate = s.readyDate ?? null
+      } else if (tP > tS && tP > 0) {
+        docs = {
+          idFront: prev.docs?.idFront ?? null,
+          idBack: prev.docs?.idBack ?? null,
+          psycho: prev.docs?.psycho ?? null,
+          narco: prev.docs?.narco ?? null,
+        }
+        status = prev.status
+        submittedAt = prev.submittedAt ?? null
+        readyDate = prev.readyDate ?? null
+      }
+
+      map.set(s.id, {
+        ...prev,
+        ...s,
+        docs,
+        readyDate,
+        submittedAt,
+        status,
+        updatedAt: tS >= tP ? (s.updatedAt || prev.updatedAt) : (prev.updatedAt || s.updatedAt),
+        name: s.name || prev.name,
+        phone: s.phone || prev.phone,
+        category: s.category || prev.category,
+      })
+    }
+  }
+  return [...map.values()]
+}
+
+export function mergeStringLists(a: string[], b: string[]): string[] {
+  return [...new Set([...(a || []), ...(b || [])])]
+}
+
+export function mergeProgressMaps(
+  a: Record<string, string[]> = {},
+  b: Record<string, string[]> = {},
+): Record<string, string[]> {
+  const out: Record<string, string[]> = { ...a }
+  for (const [sid, lessons] of Object.entries(b)) {
+    out[sid] = mergeStringLists(out[sid] || [], lessons || [])
+  }
+  return out
+}
+
+export function mergeMistakeMaps(
+  a: Record<string, string[]> = {},
+  b: Record<string, string[]> = {},
+): Record<string, string[]> {
+  return mergeProgressMaps(a, b)
+}
+
+function parseRow(out: SharedSlice, key: string, d: unknown) {
+  switch (key) {
+    case 'school':
+      if (d && typeof d === 'object' && !Array.isArray(d) && (d as School).name) out.school = d as School
+      break
+    case 'instructors':
+      if (Array.isArray(d) && d.length) out.instructors = normalizeInstructors(d as Instructor[])
+      break
+    case 'notices':
+      if (Array.isArray(d)) out.notices = d as Notice[]
+      break
+    case 'students':
+      if (Array.isArray(d) && d.length) out.students = d as Student[]
+      break
+    case 'theory':
+      if (Array.isArray(d) && d.length) out.theory = d as TheoryTopic[]
+      break
+    case 'questions':
+      if (Array.isArray(d) && d.length) out.questions = d as Question[]
+      break
+    case 'reviews':
+      if (Array.isArray(d)) out.reviews = d as Review[]
+      break
+    case 'messages':
+      if (Array.isArray(d)) out.messages = d as Message[]
+      break
+    case 'bookings':
+      if (Array.isArray(d)) out.bookings = d as Booking[]
+      break
+    case 'accounts':
+      if (Array.isArray(d)) out.accounts = d as Account[]
+      break
+    case 'recovery':
+      if (Array.isArray(d)) out.recovery = d as PasswordRecoveryRequest[]
+      break
+    case 'results':
+      if (Array.isArray(d)) out.results = d as TestResult[]
+      break
+    case 'learnedSigns':
+      if (Array.isArray(d)) out.learnedSigns = d as string[]
+      break
+    case 'profiles':
+      if (Array.isArray(d)) out.profiles = d as ProfileRow[]
+      break
+    case 'theoryProgress':
+      if (d && typeof d === 'object' && !Array.isArray(d)) out.theoryProgress = d as Record<string, string[]>
+      break
+    case 'roadSigns':
+      if (Array.isArray(d)) out.roadSigns = d as RoadSign[]
+      break
+    case 'presence':
+      if (d && typeof d === 'object' && !Array.isArray(d)) out.presence = d as Record<string, string>
+      break
+    case 'droppedMessageIds':
+      if (Array.isArray(d)) out.droppedMessageIds = d.filter((id) => typeof id === 'string') as string[]
+      break
+    case 'studentMistakes':
+      if (d && typeof d === 'object' && !Array.isArray(d)) out.studentMistakes = d as Record<string, string[]>
+      break
+    case 'deletedStudentIds':
+      if (Array.isArray(d)) out.deletedStudentIds = d.filter((id) => typeof id === 'string') as string[]
+      break
+    case 'deletedAccountIds':
+      if (Array.isArray(d)) out.deletedAccountIds = d.filter((id) => typeof id === 'string') as string[]
+      break
+    case 'maintenanceMode':
+      out.maintenanceMode = d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true)
+      break
+  }
+}
+
+export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
+  const sb = getSupabase()
+  if (!sb) return null
+  try {
+    const { data, error } = await sb.from('app_state').select('key, data').in('key', [...KEYS])
+    if (error) { console.warn('[sync] load error:', error.message); return null }
+    if (!data?.length) return null
+    const out: SharedSlice = {}
+    for (const row of data) parseRow(out, row.key, row.data)
+    return out
+  } catch (e) {
+    console.warn('[sync] load exception:', e)
+    return null
+  }
+}
+
+export async function loadSharedKeys(keys: SharedKey[]): Promise<SharedSlice | null> {
+  const sb = getSupabase()
+  if (!sb) return null
+  try {
+    const { data, error } = await sb.from('app_state').select('key, data').in('key', keys)
+    if (error) { console.warn('[sync] load keys:', error.message); return null }
+    const out: SharedSlice = {}
+    for (const row of data ?? []) parseRow(out, row.key, row.data)
+    return out
+  } catch (e) {
+    console.warn('[sync] load keys exception:', e)
+    return null
+  }
+}
+
+export async function loadMessagesBundle(): Promise<{ messages: Message[]; droppedMessageIds: string[] } | null> {
+  const sb = getSupabase()
+  if (!sb) return { messages: [], droppedMessageIds: [] }
+  try {
+    const { data, error } = await sb.from('app_state').select('key, data').in('key', ['messages', 'droppedMessageIds'])
+    if (error) { console.warn('[sync] messages load:', error.message); return null }
+    let messages: Message[] = []
+    let droppedMessageIds: string[] = []
+    for (const row of data ?? []) {
+      if (row.key === 'messages' && Array.isArray(row.data)) messages = row.data as Message[]
+      if (row.key === 'droppedMessageIds' && Array.isArray(row.data)) {
+        droppedMessageIds = (row.data as unknown[]).filter((id) => typeof id === 'string') as string[]
+      }
+    }
+    return { messages, droppedMessageIds }
+  } catch (e) {
+    console.warn('[sync] messages load exception:', e)
+    return null
+  }
+}
+
+function sanitizeStudentsForCloud(list: unknown): unknown {
+  if (!Array.isArray(list)) return list
+  return list.map((raw) => {
+    const s = raw as Student
+    if (!s || typeof s !== 'object') return raw
+    const docsIn = s.docs || ({} as Student['docs'])
+    const clean = (d: Student['docs'][keyof Student['docs']] | null | undefined) => {
+      if (!d?.url) return null
+      if (d.url.startsWith('http')) return d
+      if (d.url.startsWith('data:') && d.url.length < 400_000) return d
+      return null
+    }
+    return {
+      ...s,
+      docs: {
+        idFront: clean(docsIn.idFront),
+        idBack: clean(docsIn.idBack),
+        psycho: clean(docsIn.psycho),
+        narco: clean(docsIn.narco),
+      },
+    }
+  })
+}
+
+export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
+  const sb = getSupabase()
+  if (!sb) return false
+  try {
+    const payload = key === 'students' ? sanitizeStudentsForCloud(data) : data
+    const { error } = await sb.from('app_state').upsert(
+      { key, data: payload, updated_at: new Date().toISOString() },
+      { onConflict: 'key' },
+    )
+    if (error) { console.warn(`[sync] save ${key}:`, error.message); return false }
+    return true
+  } catch (e) {
+    console.warn(`[sync] save ${key} exception:`, e)
+    return false
+  }
+}
+
+export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]> {
+  const cloud = await loadSharedKeys(['students'])
+  const remote = (cloud?.students || []) as Student[]
+  const map = new Map<string, Student>()
+  for (const s of remote) {
+    if (s?.id) map.set(s.id, s)
+  }
+  for (const s of local) {
+    if (!s?.id || s.id === 'me') continue
+    const prev = map.get(s.id)
+    if (!prev) {
+      map.set(s.id, { ...s, updatedAt: s.updatedAt || new Date().toISOString() })
+      continue
+    }
+    const tLocal = Date.parse(s.updatedAt || '') || 0
+    const tPrev = Date.parse(prev.updatedAt || '') || 0
+    if (tLocal >= tPrev) {
+      map.set(s.id, {
+        ...prev,
+        ...s,
+        docs: s.docs ?? prev.docs,
+        status: s.status,
+        readyDate: s.readyDate ?? null,
+        submittedAt: s.submittedAt ?? null,
+        updatedAt: s.updatedAt || new Date().toISOString(),
+        name: s.name || prev.name,
+        phone: s.phone || prev.phone,
+        category: s.category || prev.category,
+      })
+    } else {
+      map.set(s.id, {
+        ...prev,
+        name: prev.name || s.name,
+        phone: prev.phone || s.phone,
+        category: prev.category || s.category,
+      })
+    }
+  }
+  const merged = [...map.values()].filter((s) => s.id !== 'me')
+  await saveSharedKey('students', merged)
+  return merged
+}
+
+/** Overwrite results (including empty). Never called from batch debounce. */
+export async function forceSaveResults(list: TestResult[]): Promise<void> {
+  await saveSharedKey('results', list)
+}
+
+export async function saveMergedById<T extends { id: string }>(key: SharedKey, local: T[]): Promise<T[]> {
+  const cloud = await loadSharedKeys([key])
+  const remote = (cloud?.[key as keyof SharedSlice] as T[] | undefined) || []
+  const merged =
+    key === 'students'
+      ? (mergeStudents(remote as unknown as Student[], local as unknown as Student[], [], true) as unknown as T[])
+      : mergeById(remote as T[], local)
+  await saveSharedKey(key, merged)
+  return merged
+}
+
+export const LIVE_KEYS: SharedKey[] = [
+  'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
+  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds', 'maintenanceMode',
+]
+
+export const CONTENT_KEYS: SharedKey[] = [
+  'school', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns',
+  'learnedSigns', 'profiles', 'theoryProgress', 'studentMistakes',
+]
+
+export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
+  if (!isSupabaseConfigured) return
+  const tasks: Promise<unknown>[] = []
+  if (slice.school) tasks.push(saveSharedKey('school', slice.school))
+  if (slice.instructors) tasks.push(saveSharedKey('instructors', slice.instructors))
+  if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
+  if (slice.students) tasks.push(saveStudentsLocalWins(slice.students))
+  if (slice.theory) tasks.push(saveMergedById('theory', slice.theory))
+  if (slice.questions) tasks.push(saveMergedById('questions', slice.questions))
+  if (slice.reviews) tasks.push(saveSharedKey('reviews', slice.reviews))
+  if (slice.messages) tasks.push(saveSharedKey('messages', slice.messages))
+  if (slice.bookings) tasks.push(saveMergedById('bookings', slice.bookings))
+  if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
+  if (slice.recovery) tasks.push(saveSharedKey('recovery', slice.recovery))
+  if (slice.learnedSigns) {
+    tasks.push((async () => {
+      const cloud = await loadSharedKeys(['learnedSigns'])
+      await saveSharedKey('learnedSigns', mergeStringLists(cloud?.learnedSigns || [], slice.learnedSigns || []))
+    })())
+  }
+  if (slice.profiles) tasks.push(saveSharedKey('profiles', slice.profiles))
+  if (slice.theoryProgress) {
+    tasks.push((async () => {
+      const cloud = await loadSharedKeys(['theoryProgress'])
+      await saveSharedKey('theoryProgress', mergeProgressMaps(cloud?.theoryProgress || {}, slice.theoryProgress || {}))
+    })())
+  }
+  if (slice.roadSigns) tasks.push(saveMergedById('roadSigns', slice.roadSigns))
+  if (slice.presence) tasks.push(saveSharedKey('presence', slice.presence))
+  if (slice.droppedMessageIds) tasks.push(saveSharedKey('droppedMessageIds', slice.droppedMessageIds))
+  if (slice.studentMistakes) {
+    tasks.push((async () => {
+      const cloud = await loadSharedKeys(['studentMistakes'])
+      await saveSharedKey('studentMistakes', mergeMistakeMaps(cloud?.studentMistakes || {}, slice.studentMistakes || {}))
+    })())
+  }
+  if (slice.maintenanceMode !== undefined) tasks.push(saveSharedKey('maintenanceMode', slice.maintenanceMode))
+  await Promise.all(tasks)
+}
+
+export { isSupabaseConfigured }
