@@ -54,6 +54,8 @@ type Store = {
   approveStudent: (id: string, readyDate: string) => void
   rejectStudent: (id: string) => void
   resetStudentDocs: (id: string) => void
+  archiveStudent: (id: string) => void
+  unarchiveStudent: (id: string) => void
   deleteStudent: (id: string) => void
   school: School
   setSchool: (s: School) => void
@@ -368,6 +370,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         status: 'draft',
         submittedAt: null,
         readyDate: null,
+      })),
+    archiveStudent: (id) =>
+      updateStudent(id, (s) => ({
+        ...s,
+        archived: true,
+        archivedAt: new Date().toISOString(),
+      })),
+    unarchiveStudent: (id) =>
+      updateStudent(id, (s) => ({
+        ...s,
+        archived: false,
+        archivedAt: null,
       })),
     deleteStudent: (id) => {
       if (!id || id === 'me') return
