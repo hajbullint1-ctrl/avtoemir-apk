@@ -17,6 +17,8 @@ export type Student = {
   status: DocStatus
   readyDate: string | null
   submittedAt: string | null
+  /** ISO timestamp — last local write wins on sync */
+  updatedAt?: string
 }
 
 export type Branch = { id: string; city: L; address: L; link: string }
