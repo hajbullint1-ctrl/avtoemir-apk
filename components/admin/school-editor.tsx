@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
@@ -75,6 +75,16 @@ function SaveButton({ onClick }: { onClick: () => void }) {
 export function SchoolEditor() {
   const { school, setSchool, tl } = useStore()
   const [draft, setDraft] = useState<School>(school)
+  // Keep form in sync when school loads from cloud
+  useEffect(() => {
+    setDraft({
+      ...school,
+      website: school.website ?? '',
+      instagram: school.instagram ?? '',
+      phones: school.phones?.length ? school.phones : [''],
+      branches: school.branches?.length ? school.branches : [],
+    })
+  }, [school])
   return (
     <Card title={tl({ ru: 'Информация об автошколе', kk: 'Автомектеп туралы ақпарат' })} action={<SaveButton onClick={() => setSchool(draft)} />}>
       <div className="flex flex-col gap-4">
@@ -122,7 +132,7 @@ export function SchoolEditor() {
             type="url"
             value={draft.website}
             onChange={(e) => setDraft({ ...draft, website: e.target.value })}
-            placeholder="https://..."
+            placeholder="https://avtoemir.autos"
             className={inputCls}
           />
         </Field>
