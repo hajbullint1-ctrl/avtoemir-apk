@@ -18,7 +18,7 @@ import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
   mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
-  saveStudentsLocalWins, forceSaveResults,
+  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
 import { upsertTheoryProgress, type ProfileRow } from './cloud-features'
@@ -389,7 +389,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     school,
     setSchool: (s) => {
       setSchoolState(s)
-      void saveSharedKey('school', s)
+      void saveSchoolMerged(s).then((merged) => {
+        if (merged) setSchoolState(merged)
+      })
     },
     theory,
     setTheory,
