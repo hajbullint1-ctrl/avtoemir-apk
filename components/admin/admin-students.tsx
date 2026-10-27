@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import { DOC_KEYS, type DocStatus, type Student } from '@/lib/data'
 import { adminResetPassword, listAccounts, type Account } from '@/lib/auth'
-import { OnlineBadge } from '@/components/online-badge'
+import { OnlineBadge } from '@/components/shared/online-badge'
 import { cn } from '@/lib/utils'
 
 const statusText: Record<DocStatus, { ru: string; kk: string }> = {
