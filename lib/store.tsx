@@ -248,6 +248,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStudents((list) => {
       const idx = list.findIndex((s) => s.id === id)
       let next: Student[]
+      const stamp = new Date().toISOString()
       if (idx < 0) {
         const base: Student = {
           id,
@@ -258,10 +259,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           status: 'draft',
           readyDate: null,
           submittedAt: null,
+          updatedAt: stamp,
         }
-        next = [...list.filter((s) => s.id !== 'me'), fn(base)]
+        next = [...list.filter((s) => s.id !== 'me'), { ...fn(base), updatedAt: stamp }]
       } else {
-        next = list.map((s) => (s.id === id ? fn(s) : s))
+        next = list.map((s) => (s.id === id ? { ...fn(s), updatedAt: stamp } : s))
       }
       void saveStudentsLocalWins(next).then((merged) => {
         if (merged?.length) setStudents(merged as Student[])
