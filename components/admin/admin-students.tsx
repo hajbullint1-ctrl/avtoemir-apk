@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Phone, Trash2 } from 'lucide-react'
+import { KeyRound, Phone, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import { DOC_KEYS, type DocStatus, type Student } from '@/lib/data'
-import { listAccounts, type Account } from '@/lib/auth'
+import { adminResetPassword, listAccounts, type Account } from '@/lib/auth'
 import { OnlineBadge } from '@/components/online-badge'
 import { cn } from '@/lib/utils'
 
@@ -41,32 +41,56 @@ export function StatusBadge({ status }: { status: DocStatus }) {
 
 function PasswordPanel({ accountId }: { accountId: string }) {
   const { tl } = useStore()
-  const [pwd, setPwd] = useState('')
-  const [msg, setMsg] = useState('')
+  const [password, setPassword] = useState<string | null>(null)
+  const [newPw, setNewPw] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+
   const reset = () => {
-    if (!pwd || pwd.length < 6) {
-      setMsg(tl({ ru: 'Минимум 6 символов', kk: 'Кемінде 6 таңба' }))
+    const pw = newPw.trim() || Math.random().toString(36).slice(2, 10)
+    const res = adminResetPassword(accountId, pw)
+    if (!res.ok) {
+      setMsg(tl({ ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' }))
       return
     }
-    try {
-      const accounts = listAccounts()
-      const i = accounts.findIndex((a) => a.id === accountId)
-      if (i < 0) {
-        setMsg(tl({ ru: 'Аккаунт не найден', kk: 'Аккаунт табылмады' }))
-        return
-      }
-      // dynamic import avoided — auth has setPassword on account via local storage helpers
-      const { hashPasswordSync } = require('@/lib/auth') as { hashPasswordSync?: (p: string) => string }
-      setMsg(tl({ ru: 'Используйте сброс через раздел аккаунтов', kk: 'Аккаунттар бөлімінен ысырыңыз' }))
-    } catch {
-      setMsg('')
-    }
+    setPassword(res.password)
+    setNewPw('')
+    setMsg(tl({
+      ru: 'Новый пароль задан. Передайте его студенту — старый посмотреть нельзя.',
+      kk: 'Жаңа құпия сөз орнатылды. Студентке беріңіз — ескісін көру мүмкін емес.',
+    }))
   }
+
   return (
-    <div className="rounded-xl border bg-muted/40 p-3">
-      <p className="mb-2 text-xs font-medium text-muted-foreground">
-        {tl({ ru: 'Сброс пароля ученика — через меню аккаунтов / восстановление', kk: 'Құпия сөзді ысыру — аккаунттар мәзірі' })}
+    <div className="rounded-xl border bg-muted/30 p-4">
+      <h3 className="mb-2 flex items-center gap-2 font-semibold">
+        <KeyRound className="size-4 text-primary" aria-hidden="true" />
+        {tl({ ru: 'Пароль студента', kk: 'Студент құпия сөзі' })}
+      </h3>
+      <p className="mb-2 text-xs text-muted-foreground">
+        {tl({
+          ru: 'Пароли не хранятся открытым текстом. Задайте новый — он один раз покажется здесь.',
+          kk: 'Құпия сөздер ашық сақталмайды. Жаңасын орнатыңыз — бір рет осында көрсетіледі.',
+        })}
       </p>
+      {password && (
+        <code className="mb-2 block rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold tracking-wide">{password}</code>
+      )}
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+          {tl({ ru: 'Новый пароль (пусто = сгенерировать)', kk: 'Жаңа құпия сөз (бос = генерация)' })}
+          <input
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+            placeholder="••••"
+            className="h-10 rounded-lg border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+        </label>
+        <Button type="button" size="sm" className="h-10" onClick={reset}>
+          <RefreshCw className="size-4" aria-hidden="true" />
+          {tl({ ru: 'Сбросить пароль', kk: 'Құпия сөзді ысыру' })}
+        </Button>
+      </div>
+      {msg && <p className="mt-2 text-xs text-muted-foreground">{msg}</p>}
     </div>
   )
 }
