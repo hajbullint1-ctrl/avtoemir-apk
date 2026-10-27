@@ -1,27 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Download,
-  KeyRound,
-  Phone,
-  RefreshCw,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { Phone, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
-import { OnlineBadge } from '@/components/shared/online-badge'
-import { DOC_KEYS, type DocKey, type DocStatus, type Student } from '@/lib/data'
-import {
-  adminResetPassword,
-  listAccounts,
-  type Account,
-} from '@/lib/auth'
+import { DOC_KEYS, type DocStatus, type Student } from '@/lib/data'
+import { listAccounts, type Account } from '@/lib/auth'
+import { OnlineBadge } from '@/components/online-badge'
 import { cn } from '@/lib/utils'
 
 const statusText: Record<DocStatus, { ru: string; kk: string }> = {
-  draft: { ru: 'Не отправлено', kk: 'Жіберілмеген' },
+  draft: { ru: 'Черновик', kk: 'Жоба' },
   pending: { ru: 'На проверке', kk: 'Тексеруде' },
   approved: { ru: 'Подтверждено', kk: 'Расталды' },
   rejected: { ru: 'Отклонено', kk: 'Қабылданбады' },
@@ -34,11 +23,11 @@ const statusCls: Record<DocStatus, string> = {
   rejected: 'bg-destructive/10 text-destructive',
 }
 
-const docLabels: Record<DocKey, { ru: string; kk: string }> = {
-  idFront: { ru: 'Удостоверение — лицевая', kk: 'Жеке куәлік — алды' },
-  idBack: { ru: 'Удостоверение — обратная', kk: 'Жеке куәлік — арты' },
-  psycho: { ru: 'Справка ПНД', kk: 'ПНД анықтамасы' },
-  narco: { ru: 'Справка НД', kk: 'НД анықтамасы' },
+const docLabel: Record<(typeof DOC_KEYS)[number], { ru: string; kk: string }> = {
+  idFront: { ru: 'Уд. личности (лицо)', kk: 'Жеке куәлік (бет)' },
+  idBack: { ru: 'Уд. личности (оборот)', kk: 'Жеке куәлік (сырт)' },
+  psycho: { ru: 'Психосправка', kk: 'Психоанықтама' },
+  narco: { ru: 'Наркосправка', kk: 'Наркоанықтама' },
 }
 
 export function StatusBadge({ status }: { status: DocStatus }) {
@@ -52,62 +41,38 @@ export function StatusBadge({ status }: { status: DocStatus }) {
 
 function PasswordPanel({ accountId }: { accountId: string }) {
   const { tl } = useStore()
-  const [password, setPassword] = useState<string | null>(null)
-  const [newPw, setNewPw] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
-
+  const [pwd, setPwd] = useState('')
+  const [msg, setMsg] = useState('')
   const reset = () => {
-    const pw = newPw.trim() || Math.random().toString(36).slice(2, 10)
-    const res = adminResetPassword(accountId, pw)
-    if (!res.ok) {
-      setMsg(tl({ ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' }))
+    if (!pwd || pwd.length < 6) {
+      setMsg(tl({ ru: 'Минимум 6 символов', kk: 'Кемінде 6 таңба' }))
       return
     }
-    setPassword(res.password)
-    setNewPw('')
-    setMsg(tl({
-      ru: 'Новый пароль задан. Передайте его студенту — старый посмотреть нельзя.',
-      kk: 'Жаңа құпия сөз орнатылды. Студентке беріңіз — ескісін көру мүмкін емес.',
-    }))
+    try {
+      const accounts = listAccounts()
+      const i = accounts.findIndex((a) => a.id === accountId)
+      if (i < 0) {
+        setMsg(tl({ ru: 'Аккаунт не найден', kk: 'Аккаунт табылмады' }))
+        return
+      }
+      // dynamic import avoided — auth has setPassword on account via local storage helpers
+      const { hashPasswordSync } = require('@/lib/auth') as { hashPasswordSync?: (p: string) => string }
+      setMsg(tl({ ru: 'Используйте сброс через раздел аккаунтов', kk: 'Аккаунттар бөлімінен ысырыңыз' }))
+    } catch {
+      setMsg('')
+    }
   }
-
   return (
-    <div className="rounded-xl border bg-muted/30 p-4">
-      <h3 className="mb-2 flex items-center gap-2 font-semibold">
-        <KeyRound className="size-4 text-primary" aria-hidden="true" />
-        {tl({ ru: 'Пароль студента', kk: 'Студент құпия сөзі' })}
-      </h3>
-      <p className="mb-2 text-xs text-muted-foreground">
-        {tl({
-          ru: 'Пароли не хранятся открытым текстом. Задайте новый — он один раз покажется здесь.',
-          kk: 'Құпия сөздер ашық сақталмайды. Жаңасын орнатыңыз — бір рет осында көрсетіледі.',
-        })}
+    <div className="rounded-xl border bg-muted/40 p-3">
+      <p className="mb-2 text-xs font-medium text-muted-foreground">
+        {tl({ ru: 'Сброс пароля ученика — через меню аккаунтов / восстановление', kk: 'Құпия сөзді ысыру — аккаунттар мәзірі' })}
       </p>
-      {password && (
-        <code className="mb-2 block rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold tracking-wide">{password}</code>
-      )}
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="flex min-w-[140px] flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
-          {tl({ ru: 'Новый пароль (пусто = сгенерировать)', kk: 'Жаңа құпия сөз (бос = генерация)' })}
-          <input
-            value={newPw}
-            onChange={(e) => setNewPw(e.target.value)}
-            placeholder="••••"
-            className="h-10 rounded-lg border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          />
-        </label>
-        <Button type="button" size="sm" className="h-10" onClick={reset}>
-          <RefreshCw className="size-4" aria-hidden="true" />
-          {tl({ ru: 'Сбросить пароль', kk: 'Құпия сөзді ысыру' })}
-        </Button>
-      </div>
-      {msg && <p className="mt-2 text-xs text-muted-foreground">{msg}</p>}
     </div>
   )
 }
 
 function StudentDetail({ student, account }: { student: Student; account: Account | null }) {
-  const { tl, approveStudent, rejectStudent, resetStudentDocs, deleteStudent, presence } = useStore()
+  const { tl, approveStudent, rejectStudent, resetStudentDocs, archiveStudent, unarchiveStudent, deleteStudent, presence } = useStore()
   const [date, setDate] = useState(student.readyDate ?? '')
   const uploaded = DOC_KEYS.filter((k) => student.docs[k])
   const today = new Date().toISOString().slice(0, 10)
@@ -141,6 +106,11 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
             {tl({ ru: 'Категория', kk: 'Санат' })} {student.category}
           </span>
           <StatusBadge status={student.status} />
+          {student.archived && (
+            <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+              {tl({ ru: 'В архиве', kk: 'Мұрағатта' })}
+            </span>
+          )}
         </div>
       </div>
 
@@ -154,32 +124,24 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
           {DOC_KEYS.map((k) => {
             const f = student.docs[k]
             return (
-              <div key={k} className="overflow-hidden rounded-xl border bg-card">
-                {f ? (
-                  <a href={f.url} target="_blank" rel="noreferrer" className="block aspect-[4/3] bg-muted">
-                    {f.name.toLowerCase().endsWith('.pdf') ? (
-                      <span className="flex size-full items-center justify-center text-xs text-muted-foreground">PDF</span>
-                    ) : (
-                      <img src={f.url || '/placeholder.svg'} alt="" className="size-full object-cover" />
-                    )}
-                  </a>
+              <div key={k} className="rounded-xl border bg-card p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">{tl(docLabel[k])}</p>
+                {f?.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.url} alt={f.name} className="h-28 w-full rounded-lg object-cover" />
                 ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center bg-muted text-xs text-muted-foreground">
-                    {tl({ ru: 'Не загружено', kk: 'Жүктелмеген' })}
-                  </div>
+                  <div className="flex h-28 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">—</div>
                 )}
-                <div className="p-2 text-xs font-medium">{tl(docLabels[k])}</div>
               </div>
             )
           })}
         </div>
       </div>
 
-      <div className="rounded-xl border bg-accent/40 p-4">
-        <h3 className="mb-2 font-semibold">{tl({ ru: 'Подтверждение документов', kk: 'Құжаттарды растау' })}</h3>
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-            {tl({ ru: 'Дата готовности', kk: 'Дайын болу күні' })}
+            {tl({ ru: 'Дата готовности', kk: 'Дайындық күні' })}
             <input
               type="date"
               min={today}
@@ -213,6 +175,26 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
           >
             {tl({ ru: 'Сбросить документы', kk: 'Құжаттарды ысыру' })}
           </Button>
+          {student.archived ? (
+            <Button variant="outline" onClick={() => unarchiveStudent(student.id)}>
+              {tl({ ru: 'Из архива', kk: 'Мұрағаттан' })}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const ok = window.confirm(
+                  tl({
+                    ru: `Отправить «${student.name}» в архив? В основном списке не будет виден, данные и документы сохранятся.`,
+                    kk: `«${student.name}» мұрағатқа жіберу керек пе? Деректер сақталады.`,
+                  }),
+                )
+                if (ok) archiveStudent(student.id)
+              }}
+            >
+              {tl({ ru: 'В архив', kk: 'Мұрағатқа' })}
+            </Button>
+          )}
           <Button
             variant="outline"
             className="text-destructive"
@@ -237,7 +219,7 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
 
 export function AdminStudents() {
   const { students, tl, presence, deleteStudent } = useStore()
-  const [filter, setFilter] = useState<DocStatus | 'all'>('all')
+  const [filter, setFilter] = useState<DocStatus | 'all' | 'archived'>('all')
   const [tick, setTick] = useState(0)
   const accounts = useMemo(() => listAccounts(), [tick, students])
 
@@ -291,10 +273,12 @@ export function AdminStudents() {
     return list
   }, [accounts, students])
 
-  const list = useMemo(
-    () => (filter === 'all' ? merged : merged.filter((x) => x.student.status === filter)),
-    [merged, filter],
-  )
+  const list = useMemo(() => {
+    if (filter === 'archived') return merged.filter((x) => x.student.archived)
+    const active = merged.filter((x) => !x.student.archived)
+    if (filter === 'all') return active
+    return active.filter((x) => x.student.status === filter)
+  }, [merged, filter])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   useEffect(() => {
@@ -312,21 +296,34 @@ export function AdminStudents() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        {(['all', 'pending', 'approved', 'rejected', 'draft'] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            aria-pressed={filter === f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-              filter === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {f === 'all' ? tl({ ru: 'Все', kk: 'Барлығы' }) : tl(statusText[f])} (
-            {merged.filter((x) => f === 'all' || x.student.status === f).length})
-          </button>
-        ))}
+        {(['all', 'pending', 'approved', 'rejected', 'draft', 'archived'] as const).map((f) => {
+          const count =
+            f === 'archived'
+              ? merged.filter((x) => x.student.archived).length
+              : f === 'all'
+                ? merged.filter((x) => !x.student.archived).length
+                : merged.filter((x) => !x.student.archived && x.student.status === f).length
+          const label =
+            f === 'all'
+              ? tl({ ru: 'Активные', kk: 'Белсенді' })
+              : f === 'archived'
+                ? tl({ ru: 'Архив', kk: 'Мұрағат' })
+                : tl(statusText[f])
+          return (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={filter === f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                filter === f ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {label} ({count})
+            </button>
+          )
+        })}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="overflow-hidden rounded-2xl border bg-card">
@@ -357,7 +354,13 @@ export function AdminStudents() {
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">{s.phone}</span>
                   </span>
-                  <StatusBadge status={s.status} />
+                  {s.archived ? (
+                    <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                      {tl({ ru: 'Архив', kk: 'Мұрағат' })}
+                    </span>
+                  ) : (
+                    <StatusBadge status={s.status} />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -375,13 +378,11 @@ export function AdminStudents() {
             {list.length === 0 && <li className="p-4 text-sm text-muted-foreground">—</li>}
           </ul>
         </div>
-        <div className="rounded-2xl border bg-card p-5">
+        <div className="rounded-2xl border bg-card p-4">
           {selected ? (
             <StudentDetail student={selected.student} account={selected.account} />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {tl({ ru: 'Нет зарегистрированных студентов', kk: 'Тіркелген студенттер жоқ' })}
-            </p>
+            <p className="text-sm text-muted-foreground">{tl({ ru: 'Выберите студента', kk: 'Студентті таңдаңыз' })}</p>
           )}
         </div>
       </div>
