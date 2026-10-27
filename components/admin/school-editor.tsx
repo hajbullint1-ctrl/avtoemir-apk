@@ -75,8 +75,10 @@ function SaveButton({ onClick }: { onClick: () => void }) {
 export function SchoolEditor() {
   const { school, setSchool, tl } = useStore()
   const [draft, setDraft] = useState<School>(school)
-  // Keep form in sync when school loads from cloud
+  const [dirty, setDirty] = useState(false)
+  // Sync from cloud only when user is not editing
   useEffect(() => {
+    if (dirty) return
     setDraft({
       ...school,
       website: school.website ?? '',
@@ -84,19 +86,23 @@ export function SchoolEditor() {
       phones: school.phones?.length ? school.phones : [''],
       branches: school.branches?.length ? school.branches : [],
     })
-  }, [school])
+  }, [school, dirty])
+  const patch = (p: Partial<School>) => {
+    setDirty(true)
+    setDraft((d) => ({ ...d, ...p }))
+  }
   return (
-    <Card title={tl({ ru: 'Информация об автошколе', kk: 'Автомектеп туралы ақпарат' })} action={<SaveButton onClick={() => setSchool(draft)} />}>
+    <Card title={tl({ ru: 'Информация об автошколе', kk: 'Автомектеп туралы ақпарат' })} action={<SaveButton onClick={() => { setSchool(draft); setDirty(false) }} />}>
       <div className="flex flex-col gap-4">
         <Field label={tl({ ru: 'Название', kk: 'Атауы' })}>
-          <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} />
+          <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} className={inputCls} />
         </Field>
-        <BiInput label={tl({ ru: 'Описание', kk: 'Сипаттама' })} value={draft.about} onChange={(about) => setDraft({ ...draft, about })} multiline />
-        <BiInput label={tl({ ru: 'Режим работы', kk: 'Жұмыс уақыты' })} value={draft.hours} onChange={(hours) => setDraft({ ...draft, hours })} />
+        <BiInput label={tl({ ru: 'Описание', kk: 'Сипаттама' })} value={draft.about} onChange={(about) => patch({ about })} multiline />
+        <BiInput label={tl({ ru: 'Режим работы', kk: 'Жұмыс уақыты' })} value={draft.hours} onChange={(hours) => patch({ hours })} />
         <Field label={tl({ ru: 'Телефоны (через запятую)', kk: 'Телефондар (үтір арқылы)' })}>
           <input
             value={draft.phones.join(', ')}
-            onChange={(e) => setDraft({ ...draft, phones: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+            onChange={(e) => patch({ phones: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
             className={inputCls}
           />
         </Field>
@@ -104,7 +110,7 @@ export function SchoolEditor() {
           <input
             type="tel"
             value={draft.phoneEnrollment ?? ''}
-            onChange={(e) => setDraft({ ...draft, phoneEnrollment: e.target.value })}
+            onChange={(e) => patch({ phoneEnrollment: e.target.value })}
             placeholder="+7 7XX XXX XX XX"
             className={inputCls}
           />
@@ -113,7 +119,7 @@ export function SchoolEditor() {
           <input
             type="tel"
             value={draft.phoneSupport ?? ''}
-            onChange={(e) => setDraft({ ...draft, phoneSupport: e.target.value })}
+            onChange={(e) => patch({ phoneSupport: e.target.value })}
             placeholder="+7 7XX XXX XX XX"
             className={inputCls}
           />
@@ -122,7 +128,7 @@ export function SchoolEditor() {
           <input
             type="url"
             value={draft.instagram}
-            onChange={(e) => setDraft({ ...draft, instagram: e.target.value })}
+            onChange={(e) => patch({ instagram: e.target.value })}
             placeholder="https://www.instagram.com/..."
             className={inputCls}
           />
@@ -131,7 +137,7 @@ export function SchoolEditor() {
           <input
             type="url"
             value={draft.website}
-            onChange={(e) => setDraft({ ...draft, website: e.target.value })}
+            onChange={(e) => patch({ website: e.target.value })}
             placeholder="https://avtoemir.autos"
             className={inputCls}
           />
@@ -143,7 +149,8 @@ export function SchoolEditor() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() =>
+              onClick={() => {
+                setDirty(true)
                 setDraft({
                   ...draft,
                   branches: [
@@ -151,15 +158,17 @@ export function SchoolEditor() {
                     { id: uid(), city: emptyL(), address: emptyL(), link: '' },
                   ],
                 })
-              }
+              }}
             >
               <Plus className="size-4" aria-hidden="true" />
               {tl({ ru: 'Добавить филиал', kk: 'Филиал қосу' })}
             </Button>
           </div>
           {draft.branches.map((b, i) => {
-            const update = (patch: Partial<typeof b>) =>
-              setDraft({ ...draft, branches: draft.branches.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
+            const update = (p: Partial<typeof b>) => {
+              setDirty(true)
+              setDraft({ ...draft, branches: draft.branches.map((x, j) => (j === i ? { ...x, ...p } : x)) })
+            }
             return (
               <div key={b.id} className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-3">
                 <div className="flex justify-end">
@@ -169,7 +178,10 @@ export function SchoolEditor() {
                     size="icon"
                     aria-label={tl({ ru: 'Удалить филиал', kk: 'Филиалды жою' })}
                     disabled={draft.branches.length <= 1}
-                    onClick={() => setDraft({ ...draft, branches: draft.branches.filter((_, j) => j !== i) })}
+                    onClick={() => {
+                      setDirty(true)
+                      setDraft({ ...draft, branches: draft.branches.filter((_, j) => j !== i) })
+                    }}
                   >
                     <Trash2 className="size-4 text-destructive" aria-hidden="true" />
                   </Button>
