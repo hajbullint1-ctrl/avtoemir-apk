@@ -45,11 +45,11 @@ function PasswordPanel({ accountId }: { accountId: string }) {
   const [newPw, setNewPw] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
 
-  const reset = () => {
+  const reset = async () => {
     const pw = newPw.trim() || Math.random().toString(36).slice(2, 10)
-    const res = adminResetPassword(accountId, pw)
+    const res = await adminResetPassword(accountId, pw)
     if (!res.ok) {
-      setMsg(tl({ ru: 'Пароль не менее 4 символов', kk: 'Құпия сөз кемінде 4 таңба' }))
+      setMsg(tl({ ru: 'Пароль не менее 6 символов', kk: 'Құпия сөз кемінде 6 таңба' }))
       return
     }
     setPassword(res.password)
@@ -85,7 +85,7 @@ function PasswordPanel({ accountId }: { accountId: string }) {
             className="h-10 rounded-lg border bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           />
         </label>
-        <Button type="button" size="sm" className="h-10" onClick={reset}>
+        <Button type="button" size="sm" className="h-10" onClick={() => void reset()}>
           <RefreshCw className="size-4" aria-hidden="true" />
           {tl({ ru: 'Сбросить пароль', kk: 'Құпия сөзді ысыру' })}
         </Button>
