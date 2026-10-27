@@ -117,8 +117,20 @@ export function mergeStudents(
         continue
       }
 
+      // Docs: never wipe a side that has real files just because the other is empty draft.
+      // Empty draft wins only when:
+      //  - preferSecondStatus (local intentional reset via saveMergedById), or
+      //  - s is empty draft AND prev had pending/rejected/approved (admin reset on cloud).
+      // This stops 15s pull + merge from deleting uploads that are not yet in cloud.
+      const rankS = STATUS_RANK[s.status] ?? 0
+      const rankP = STATUS_RANK[prev.status] ?? 0
+      const sIsReset = isDocsReset(s)
+      const intentionalEmpty =
+        sIsReset &&
+        (preferSecondStatus || rankP >= 1 /* prev was submitted or reviewed */)
+
       let docs: Student['docs']
-      if (isDocsReset(s) || isDocsReset(prev)) {
+      if (intentionalEmpty) {
         docs = { idFront: null, idBack: null, psycho: null, narco: null }
       } else {
         docs = {
@@ -129,21 +141,17 @@ export function mergeStudents(
         }
       }
 
-      const rankS = STATUS_RANK[s.status] ?? 0
-      const rankP = STATUS_RANK[prev.status] ?? 0
       let status: Student['status']
-      if (rankS > rankP) status = s.status
+      if (intentionalEmpty) {
+        status = 'draft'
+      } else if (rankS > rankP) status = s.status
       else if (rankS < rankP) status = prev.status
       else status = preferSecondStatus ? s.status : prev.status
-      let submittedAt = s.submittedAt || prev.submittedAt
-      let readyDate = s.readyDate || prev.readyDate
+
+      let submittedAt = intentionalEmpty ? null : (s.submittedAt || prev.submittedAt)
+      let readyDate = intentionalEmpty ? null : (s.readyDate || prev.readyDate)
       if (s.status === 'rejected' && preferSecondStatus) {
         status = 'rejected'
-        readyDate = null
-      }
-      if (isDocsReset(s) || isDocsReset(prev)) {
-        status = 'draft'
-        submittedAt = null
         readyDate = null
       }
 
@@ -363,13 +371,14 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
       map.set(s.id, s)
       continue
     }
+    const localDocs = s.docs ?? prev.docs
     map.set(s.id, {
       ...prev,
       ...s,
-      docs: s.docs ?? prev.docs,
+      docs: localDocs,
       status: s.status,
-      readyDate: s.readyDate,
-      submittedAt: s.submittedAt,
+      readyDate: s.readyDate ?? null,
+      submittedAt: s.submittedAt ?? null,
       name: s.name || prev.name,
       phone: s.phone || prev.phone,
       category: s.category || prev.category,
@@ -412,7 +421,7 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.school) tasks.push(saveSharedKey('school', slice.school))
   if (slice.instructors) tasks.push(saveSharedKey('instructors', slice.instructors))
   if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
-  if (slice.students) tasks.push(saveMergedById('students', slice.students))
+  if (slice.students) tasks.push(saveStudentsLocalWins(slice.students))
   if (slice.theory) tasks.push(saveMergedById('theory', slice.theory))
   if (slice.questions) tasks.push(saveMergedById('questions', slice.questions))
   if (slice.reviews) tasks.push(saveSharedKey('reviews', slice.reviews))
