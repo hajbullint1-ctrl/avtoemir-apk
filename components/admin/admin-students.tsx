@@ -147,12 +147,35 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
         <div className="grid grid-cols-2 gap-3">
           {DOC_KEYS.map((k) => {
             const f = student.docs[k]
+            const url = f?.url || ''
+            const name = f?.name || k
+            const isImg = /^data:image\//i.test(url) || /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(url)
+            const isPdf = /\.pdf(\?|$)/i.test(url) || /\.pdf$/i.test(name) || url.includes('application/pdf')
             return (
               <div key={k} className="rounded-xl border bg-card p-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">{tl(docLabel[k])}</p>
-                {f?.url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={f.url} alt={f.name} className="h-28 w-full rounded-lg object-cover" />
+                {url ? (
+                  <div className="flex flex-col gap-2">
+                    {isImg ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+                        <img src={url} alt={name} className="h-28 w-full rounded-lg object-cover" />
+                      </a>
+                    ) : (
+                      <div className="flex h-28 flex-col items-center justify-center gap-1 rounded-lg bg-muted px-2 text-center">
+                        <span className="text-2xl" aria-hidden="true">{isPdf ? '📄' : '📎'}</span>
+                        <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">{name}</span>
+                      </div>
+                    )}
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center justify-center rounded-lg border bg-background text-xs font-semibold text-primary hover:bg-accent"
+                    >
+                      {tl({ ru: 'Открыть', kk: 'Ашу' })}
+                    </a>
+                  </div>
                 ) : (
                   <div className="flex h-28 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">—</div>
                 )}
