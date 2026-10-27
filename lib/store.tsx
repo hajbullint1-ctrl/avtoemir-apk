@@ -100,7 +100,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [lang, setLang] = useState<Lang>('ru')
   const [students, setStudents] = useState(seedStudents)
-  const [school, setSchool] = useState(seedSchool)
+  const [school, setSchoolState] = useState(seedSchool)
   const [theory, setTheory] = useState(seedTheory as TheoryTopic[])
   const [questions, setQuestions] = useState(seedQuestions)
   const [instructors, setInstructors] = useState(seedInstructors)
@@ -122,7 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const p = loadPersisted()
     if (p) {
       if (Array.isArray(p.students)) setStudents(p.students as Student[])
-      if (p.school) setSchool({ ...seedSchool, ...(p.school as School) })
+      if (p.school) setSchoolState({ ...seedSchool, ...(p.school as School) })
       if (Array.isArray(p.theory)) setTheory(ensureTheoryContent(p.theory as TheoryTopic[]))
       if (Array.isArray(p.questions)) setQuestions(p.questions as Question[])
       if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
@@ -144,9 +144,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       const cloud = await loadSharedFromCloud()
       if (cloud?.school?.name) {
-        setSchool({
+        setSchoolState({
           ...seedSchool,
           ...cloud.school,
+          website: cloud.school.website ?? '',
+          instagram: cloud.school.instagram ?? '',
           branches: cloud.school.branches?.length ? cloud.school.branches : seedSchool.branches,
         })
       }
@@ -383,7 +385,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })()
     },
     school,
-    setSchool,
+    setSchool: (s) => {
+      setSchoolState(s)
+      void saveSharedKey('school', s)
+    },
     theory,
     setTheory,
     profiles,
