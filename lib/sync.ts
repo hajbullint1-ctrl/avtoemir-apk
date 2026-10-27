@@ -119,10 +119,8 @@ export function mergeStudents(
 
       const rankS = STATUS_RANK[s.status] ?? 0
       const rankP = STATUS_RANK[prev.status] ?? 0
-      const sIsReset = isDocsReset(s)
       const intentionalEmpty =
-        sIsReset &&
-        (preferSecondStatus || rankP >= 1)
+        isDocsReset(s) && (preferSecondStatus || rankP >= 1)
 
       let docs: Student['docs']
       if (intentionalEmpty) {
@@ -137,9 +135,8 @@ export function mergeStudents(
       }
 
       let status: Student['status']
-      if (intentionalEmpty) {
-        status = 'draft'
-      } else if (rankS > rankP) status = s.status
+      if (intentionalEmpty) status = 'draft'
+      else if (rankS > rankP) status = s.status
       else if (rankS < rankP) status = prev.status
       else status = preferSecondStatus ? s.status : prev.status
 
@@ -377,6 +374,29 @@ export async function saveSharedKey(key: SharedKey, data: unknown): Promise<bool
   }
 }
 
+/** Save school without letting a stale empty website/instagram wipe cloud values. */
+export async function saveSchoolMerged(local: School): Promise<School> {
+  const cloud = await loadSharedKeys(['school'])
+  const remote = cloud?.school
+  const merged: School = remote
+    ? {
+        ...remote,
+        ...local,
+        website: (local.website || '').trim() || remote.website || '',
+        instagram: (local.instagram || '').trim() || remote.instagram || '',
+        phoneEnrollment: (local.phoneEnrollment || '').trim() || remote.phoneEnrollment || '',
+        phoneSupport: (local.phoneSupport || '').trim() || remote.phoneSupport || '',
+        phones: local.phones?.length ? local.phones : remote.phones,
+        branches: local.branches?.length ? local.branches : remote.branches,
+        name: (local.name || '').trim() || remote.name,
+        about: local.about?.ru || local.about?.kk ? local.about : remote.about,
+        hours: local.hours?.ru || local.hours?.kk ? local.hours : remote.hours,
+      }
+    : local
+  await saveSharedKey('school', merged)
+  return merged
+}
+
 export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]> {
   const cloud = await loadSharedKeys(['students'])
   const remote = (cloud?.students || []) as Student[]
@@ -393,7 +413,14 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
     }
     const tLocal = Date.parse(s.updatedAt || '') || 0
     const tPrev = Date.parse(prev.updatedAt || '') || 0
-    if (tLocal >= tPrev) {
+    const rankL = STATUS_RANK[s.status] ?? 0
+    const rankR = STATUS_RANK[prev.status] ?? 0
+    const localWins =
+      tLocal > tPrev ||
+      (tLocal === tPrev && tLocal > 0) ||
+      (tLocal === 0 && tPrev === 0 && rankL >= rankR)
+
+    if (localWins) {
       map.set(s.id, {
         ...prev,
         ...s,
@@ -401,7 +428,7 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
         status: s.status,
         readyDate: s.readyDate ?? null,
         submittedAt: s.submittedAt ?? null,
-        updatedAt: s.updatedAt || new Date().toISOString(),
+        updatedAt: s.updatedAt || (tLocal ? s.updatedAt : new Date().toISOString()),
         name: s.name || prev.name,
         phone: s.phone || prev.phone,
         category: s.category || prev.category,
@@ -420,7 +447,6 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
   return merged
 }
 
-/** Overwrite results (including empty). Never called from batch debounce. */
 export async function forceSaveResults(list: TestResult[]): Promise<void> {
   await saveSharedKey('results', list)
 }
@@ -449,7 +475,7 @@ export const CONTENT_KEYS: SharedKey[] = [
 export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (!isSupabaseConfigured) return
   const tasks: Promise<unknown>[] = []
-  if (slice.school) tasks.push(saveSharedKey('school', slice.school))
+  if (slice.school) tasks.push(saveSchoolMerged(slice.school))
   if (slice.instructors) tasks.push(saveSharedKey('instructors', slice.instructors))
   if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
   if (slice.students) tasks.push(saveStudentsLocalWins(slice.students))
