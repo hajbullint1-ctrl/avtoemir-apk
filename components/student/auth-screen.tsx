@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Car, Eye, EyeOff, KeyRound, LogIn, UserPlus } from 'lucide-react'
+import { Car, Eye, EyeOff, KeyRound, LogIn, UserPlus, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 type Mode = 'login' | 'register' | 'forgot'
 
 export function AuthScreen() {
-  const { login, register, lang, t, tl } = useStore()
+  const { login, register, loginAsGuest, lang, t, tl } = useStore()
   const [mode, setMode] = useState<Mode>('login')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -230,6 +230,26 @@ export function AuthScreen() {
                 </>
               )}
             </Button>
+            {mode === 'login' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true)
+                  try {
+                    loginAsGuest()
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                <UserRound className="size-4" aria-hidden="true" />
+                {tl({ ru: 'Войти как гость', kk: 'Қонақ ретінде кіру' })}
+              </Button>
+            )}
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === 'login' && (

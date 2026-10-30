@@ -348,6 +348,24 @@ function createSession(account: Account): Session {
   return session
 }
 
+/**
+ * Guest session for Google Play review / demo.
+ * No password, local only — does not create a real account in Supabase.
+ */
+export function loginAsGuest(): Session {
+  const session: Session = {
+    accountId: 'guest_play_review',
+    fullName: 'Guest / Қонақ',
+    phone: '+70000000000',
+    token: `guest_${uid()}`,
+    expiresAt: Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000,
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  }
+  return session
+}
+
 export function loadSession(): Session | null {
   if (typeof window === 'undefined') return null
   try {

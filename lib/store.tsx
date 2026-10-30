@@ -12,7 +12,7 @@ import {
 } from './data'
 import {
   clearSession, deleteAccount, listAccounts, listPasswordRecoveryRequests, loadSession, loginAccount,
-  mergeAccountsFromCloud, mergeRecoveryFromCloud, registerAccount, type Session,
+  loginAsGuest, mergeAccountsFromCloud, mergeRecoveryFromCloud, registerAccount, type Session,
 } from './auth'
 import { loadPersisted, savePersisted } from './persist'
 import {
@@ -40,6 +40,8 @@ type Store = {
   session: Session | null
   login: (phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   register: (fullName: string, phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** Skip auth — for Google Play reviewers and demo */
+  loginAsGuest: () => void
   logout: () => void
   deleteMyAccount: () => { ok: true } | { ok: false; error: string }
   lang: Lang
@@ -321,6 +323,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
       }
       return r.ok ? { ok: true } : { ok: false, error: r.error }
+    },
+    loginAsGuest: () => {
+      const s = loginAsGuest()
+      setSession(s)
+      // Local-only guest student card so tests / theory work without cloud account
+      setStudents((list) => {
+        if (list.some((x) => x.id === s.accountId)) return list
+        const guest: Student = {
+          id: s.accountId,
+          name: s.fullName,
+          phone: s.phone,
+          category: 'B',
+          docs: { idFront: null, idBack: null, psycho: null, narco: null },
+          status: 'draft',
+          readyDate: null,
+          submittedAt: null,
+        }
+        return [...list.filter((x) => x.id !== 'me' && x.id !== s.accountId), guest]
+      })
     },
     logout: () => { clearSession(); setSession(null) },
     deleteMyAccount: () => {
