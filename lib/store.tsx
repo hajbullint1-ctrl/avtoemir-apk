@@ -163,7 +163,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.questions?.length) setQuestions((prev) => mergeById(prev, cloud.questions!))
       if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns((prev) => mergeById(prev, cloud.roadSigns!))
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews((prev) => mergeById(prev, cloud.reviews!))
-      if (cloud?.messages) setMessages(cloud.messages)
+      if (cloud?.messages) {
+        const dropped = new Set(cloud.droppedMessageIds || [])
+        setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
+      }
       if (cloud?.bookings) setBookings((prev) => mergeById(prev, cloud.bookings!))
       if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
@@ -203,7 +206,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ready || !isSupabaseConfigured) return
     const tick = () => {
       void loadMessagesBundle().then((bundle) => {
-        if (bundle?.messages) setMessages(bundle.messages)
+        if (!bundle?.messages) return
+        const dropped = new Set(bundle.droppedMessageIds || [])
+        setMessages(bundle.messages.filter((m) => !dropped.has(m.id)))
       })
       void loadSharedKeys(['maintenanceMode']).then((c) => {
         if (c && typeof c.maintenanceMode === 'boolean') setMaintenanceModeState(c.maintenanceMode)
@@ -220,7 +225,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cloud) return
       if (cloud.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
       if (cloud.notices) setNotices(cloud.notices)
-      if (cloud.messages) setMessages(cloud.messages)
+      if (cloud.messages) {
+        const dropped = new Set(cloud.droppedMessageIds || [])
+        setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
+      }
       if (cloud.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
       if (Array.isArray(cloud.results) && Date.now() > resultsIgnoreUntil.current) {
         setResults(cloud.results)
@@ -488,8 +496,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
     },
-    deleteMessage: (id) => setMessages((m) => m.filter((x) => x.id !== id)),
-    deleteChat: (thread) => setMessages((m) => m.filter((x) => x.thread !== thread)),
+    deleteMessage: (id) => {
+      setMessages((m) => {
+        const next = m.filter((x) => x.id !== id)
+        void saveSharedKey('messages', next)
+        void (async () => {
+          const cloud = await loadSharedKeys(['droppedMessageIds'])
+          const dropped = [...new Set([...(cloud?.droppedMessageIds || []), id])]
+          await saveSharedKey('droppedMessageIds', dropped)
+        })()
+        return next
+      })
+    },
+    deleteChat: (thread, studentId) => {
+      setMessages((m) => {
+        const removedIds: string[] = []
+        const next = m.filter((x) => {
+          if (x.thread !== thread) return true
+          if (thread === 'admin' && studentId) {
+            if (studentId === 'legacy') {
+              if (!x.studentId) {
+                removedIds.push(x.id)
+                return false
+              }
+              return true
+            }
+            if (x.studentId === studentId) {
+              removedIds.push(x.id)
+              return false
+            }
+            return true
+          }
+          removedIds.push(x.id)
+          return false
+        })
+        void saveSharedKey('messages', next)
+        if (removedIds.length) {
+          void (async () => {
+            const cloud = await loadSharedKeys(['droppedMessageIds'])
+            const dropped = [...new Set([...(cloud?.droppedMessageIds || []), ...removedIds])]
+            await saveSharedKey('droppedMessageIds', dropped)
+          })()
+        }
+        return next
+      })
+    },
     notices,
     markNoticesRead: () => {},
     broadcastNotice: (title, body) => {
