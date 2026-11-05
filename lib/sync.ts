@@ -382,18 +382,21 @@ export async function saveSchoolMerged(local: School): Promise<School> {
     ? {
         ...remote,
         ...local,
-        website: (local.website || '').trim() || remote.website || '',
-        instagram: (local.instagram || '').trim() || remote.instagram || '',
-        phoneEnrollment: (local.phoneEnrollment || '').trim() || remote.phoneEnrollment || '',
-        phoneSupport: (local.phoneSupport || '').trim() || remote.phoneSupport || '',
-        phones: local.phones?.length ? local.phones : remote.phones,
-        branches: local.branches?.length ? local.branches : remote.branches,
+        website: (local.website ?? '').trim() || remote.website || '',
+        instagram: (local.instagram ?? '').trim() || remote.instagram || '',
+        phoneEnrollment: (local.phoneEnrollment ?? '').trim() || remote.phoneEnrollment || '',
+        phoneSupport: (local.phoneSupport ?? '').trim() || remote.phoneSupport || '',
+        phones: Array.isArray(local.phones) && local.phones.length ? local.phones : (remote.phones || []),
+        branches: Array.isArray(local.branches) && local.branches.length ? local.branches : (remote.branches || []),
         name: (local.name || '').trim() || remote.name,
         about: local.about?.ru || local.about?.kk ? local.about : remote.about,
         hours: local.hours?.ru || local.hours?.kk ? local.hours : remote.hours,
+        examAddress: local.examAddress?.ru || local.examAddress?.kk ? local.examAddress : remote.examAddress,
+        routes: Array.isArray(local.routes) && local.routes.length ? local.routes : remote.routes,
       }
     : local
-  await saveSharedKey('school', merged)
+  const ok = await saveSharedKey('school', merged)
+  if (!ok) console.warn('[sync] saveSchoolMerged failed to write school')
   return merged
 }
 
