@@ -33,8 +33,11 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light',
-  themeColor: '#1d4fd8',
+  colorScheme: 'light dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#1d4fd8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b1220' },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -48,7 +51,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru" className={`${inter.variable} bg-background`}>
+    <html lang="ru" className={`${inter.variable} bg-background`} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('ae-theme');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body className="font-sans antialiased">
         <StoreProvider>{children}</StoreProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
