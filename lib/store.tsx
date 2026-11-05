@@ -21,6 +21,7 @@ import {
   saveStudentsLocalWins, forceSaveResults, saveSchoolMerged,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
+import { syncCertificateWidget } from './certificate-widget'
 import { upsertTheoryProgress, type ProfileRow } from './cloud-features'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -257,6 +258,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [students, session])
 
+  // Keep Android home-screen certificate widget in sync
+  useEffect(() => {
+    if (!ready) return
+    const loggedIn = !!(session && session.accountId && session.accountId !== 'guest_play_review')
+    void syncCertificateWidget({
+      loggedIn,
+      fullName: me.name || session?.fullName || '',
+      schoolName: school.name || 'AvtoEmir',
+      accountId: session?.accountId || me.id || '',
+      date: me.readyDate || '',
+      status: me.status || 'draft',
+    })
+  }, [ready, session, me.id, me.name, me.readyDate, me.status, school.name])
+
   const updateStudent = useCallback((id: string, fn: (s: Student) => Student) => {
     if (!id || id === 'guest') return
     setStudents((list) => {
@@ -337,7 +352,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     loginAsGuest: () => {
       const s = loginAsGuest()
       setSession(s)
-      // Local-only guest student card so tests / theory work without cloud account
       setStudents((list) => {
         if (list.some((x) => x.id === s.accountId)) return list
         const guest: Student = {
@@ -454,7 +468,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     questions,
     setQuestions,
     instructors,
-    setInstructors,
+    setInstructors: (i) => {
+      setInstructors(i)
+      void saveSharedKey('instructors', i)
+    },
     reviews,
     setReviews,
     addReview: (r) => {
@@ -473,11 +490,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         fromMe: true,
         text,
         time: nowTime(),
-        studentId: session?.accountId || me.id,
-        authorName: me.name,
+        studentId: session?.accountId,
+        authorName: session?.fullName,
       }
-      setMessages((m) => {
-        const next = [...m, msg]
+      setMessages((list) => {
+        const next = [...list, msg]
         void saveSharedKey('messages', next)
         return next
       })
@@ -490,17 +507,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         text,
         time: nowTime(),
         studentId: meta?.studentId,
-        authorName: meta?.authorName || 'AvtoEmir',
+        authorName: meta?.authorName || 'Администрация',
       }
-      setMessages((m) => {
-        const next = [...m, msg]
+      setMessages((list) => {
+        const next = [...list, msg]
         void saveSharedKey('messages', next)
         return next
       })
     },
     deleteMessage: (id) => {
-      setMessages((m) => {
-        const next = m.filter((x) => x.id !== id)
+      setMessages((list) => {
+        const next = list.filter((m) => m.id !== id)
         void saveSharedKey('messages', next)
         void (async () => {
           const cloud = await loadSharedKeys(['droppedMessageIds'])
@@ -511,47 +528,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     },
     deleteChat: (thread, studentId) => {
-      setMessages((m) => {
-        const removedIds: string[] = []
-        const next = m.filter((x) => {
-          if (x.thread !== thread) return true
-          if (thread === 'admin' && studentId) {
-            if (studentId === 'legacy') {
-              if (!x.studentId) {
-                removedIds.push(x.id)
-                return false
-              }
-              return true
-            }
-            if (x.studentId === studentId) {
-              removedIds.push(x.id)
-              return false
-            }
-            return true
-          }
-          removedIds.push(x.id)
-          return false
-        })
+      setMessages((list) => {
+        const removed = list.filter((m) => m.thread === thread && (!studentId || m.studentId === studentId))
+        const next = list.filter((m) => !(m.thread === thread && (!studentId || m.studentId === studentId)))
         void saveSharedKey('messages', next)
-        if (removedIds.length) {
-          void (async () => {
-            const cloud = await loadSharedKeys(['droppedMessageIds'])
-            const dropped = [...new Set([...(cloud?.droppedMessageIds || []), ...removedIds])]
-            await saveSharedKey('droppedMessageIds', dropped)
-          })()
-        }
+        void (async () => {
+          const cloud = await loadSharedKeys(['droppedMessageIds'])
+          const dropped = [...new Set([...(cloud?.droppedMessageIds || []), ...removed.map((m) => m.id)])]
+          await saveSharedKey('droppedMessageIds', dropped)
+        })()
         return next
       })
     },
     notices,
     markNoticesRead: () => {
-      const sid = me.id
       setNotices((list) => {
-        const next = list.map((n) => {
-          const mine = !n.studentId || n.studentId === sid
-          if (!mine || n.read) return n
-          return { ...n, read: true }
-        })
+        const next = list.map((n) => ({ ...n, read: true }))
         void saveSharedKey('notices', next)
         return next
       })
@@ -559,36 +551,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissNotice: (id) => {
       const sid = me.id
       setNotices((list) => {
-        const next = list
-          .map((n) => {
-            if (n.id !== id) return n
-            if (n.studentId && n.studentId === sid) return null
-            const dismissed = new Set(n.dismissedBy || [])
-            dismissed.add(sid)
-            return { ...n, dismissedBy: [...dismissed] }
-          })
-          .filter((n): n is Notice => n !== null)
+        const next = list.map((n) =>
+          n.id === id ? { ...n, dismissedBy: [...new Set([...(n.dismissedBy || []), sid])] } : n,
+        )
         void saveSharedKey('notices', next)
         return next
       })
     },
     broadcastNotice: (title, body) => {
-      const n: Notice = { id: uid(), kind: 'announce', title, body, time: nowStamp(), read: false }
+      const n: Notice = {
+        id: uid(),
+        kind: 'announce',
+        title,
+        body,
+        time: nowStamp(),
+        read: false,
+      }
       setNotices((list) => {
         const next = [n, ...list]
         void saveSharedKey('notices', next)
         return next
       })
     },
-    deleteNotice: (id) =>
-      setNotices((n) => {
-        const next = n.filter((x) => x.id !== id)
+    deleteNotice: (id) => {
+      setNotices((list) => {
+        const next = list.filter((n) => n.id !== id)
         void saveSharedKey('notices', next)
         return next
-      }),
+      })
+    },
     bookings,
     addBooking: (b) => {
-      const item = { ...b, id: uid() }
+      const item: Booking = { ...b, id: uid() }
       setBookings((list) => {
         const next = [...list, item]
         void saveSharedKey('bookings', next)
@@ -597,85 +591,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     cancelBooking: (id, opts) => {
       setBookings((list) => {
-        const booking = list.find((x) => x.id === id)
-        const next = list.filter((x) => x.id !== id)
+        const next = list.filter((b) => b.id !== id)
         void saveSharedKey('bookings', next)
-        if (opts?.notifyStudent && booking?.studentId) {
-          const ins = instructors.find((i) => i.id === booking.instructorId)
-          const phone = ins?.phone || ''
-          const title: L = {
-            ru: 'Запись на вождение отменена',
-            kk: 'Жүргізу жазбасы бас тартылды',
-          }
-          const body: L = {
-            ru: `Ваша запись на ${booking.date} в ${booking.time} отменена администратором. Позвоните инструктору${phone ? `: ${phone}` : ''}.`,
-            kk: `${booking.date} ${booking.time} уақытындағы жазбаңыз әкімші тарапынан бас тартылды. Нұсқаушыға қоңырау шалыңыз${phone ? `: ${phone}` : ''}.`,
-          }
-          const n: Notice = {
-            id: uid(),
-            kind: 'info',
-            title,
-            body,
-            time: nowStamp(),
-            read: false,
-            studentId: booking.studentId,
-          }
-          setNotices((ns) => {
-            const nn = [n, ...ns]
-            void saveSharedKey('notices', nn)
-            return nn
-          })
-        }
         return next
       })
     },
     results,
     addResult: (score, total) => {
-      const item = {
+      const item: TestResult = {
         id: uid(),
+        date: nowStamp(),
         score,
         total,
-        date: nowStamp(),
-        studentId: session?.accountId || me.id,
-        studentName: me.name || session?.fullName || '',
+        studentId: session?.accountId,
+        studentName: session?.fullName,
       }
-      void (async () => {
-        const cloud = await loadSharedKeys(['results'])
-        const remote = Array.isArray(cloud?.results) ? (cloud!.results as TestResult[]) : []
-        const base = remote.length === 0 ? [] : mergeById(results, remote)
-        const next = [...base, item].slice(-400)
-        setResults(next)
-        await forceSaveResults(next)
-      })()
+      resultsIgnoreUntil.current = Date.now() + 5000
+      setResults((list) => {
+        const next = [item, ...list]
+        void forceSaveResults(next)
+        return next
+      })
     },
     clearResults: () => {
       setResults([])
-      resultsIgnoreUntil.current = Date.now() + 60_000
-      try {
-        const raw = localStorage.getItem('avtoemir.store.v2')
-        if (raw) {
-          const p = JSON.parse(raw) as Record<string, unknown>
-          p.results = []
-          localStorage.setItem('avtoemir.store.v2', JSON.stringify(p))
-        }
-      } catch { /* ignore */ }
       void forceSaveResults([])
     },
     learnedSigns,
-    toggleSign: (id, known) =>
-      setLearnedSigns((list) => (known ? [...new Set([...list, id])] : list.filter((x) => x !== id))),
+    toggleSign: (id, known) => {
+      setLearnedSigns((list) => {
+        const next = known ? [...new Set([...list, id])] : list.filter((x) => x !== id)
+        return next
+      })
+    },
     roadSigns,
     setRoadSigns,
     presence,
     maintenanceMode,
-    setMaintenanceMode: (on: boolean) => {
+    setMaintenanceMode: (on) => {
       setMaintenanceModeState(on)
       void saveSharedKey('maintenanceMode', on)
     },
-  }), [
-    ready, session, lang, students, me, school, theory, profiles, theoryProgress,
-    questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, maintenanceMode, updateStudent,
-  ])
+  }), [ready, session, lang, students, me, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, maintenanceMode, updateStudent])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
