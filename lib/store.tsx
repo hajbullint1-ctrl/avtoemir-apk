@@ -84,7 +84,7 @@ type Store = {
   deleteNotice: (id: string) => void
   bookings: Booking[]
   addBooking: (b: Omit<Booking, 'id'>) => void
-  cancelBooking: (id: string) => void
+  cancelBooking: (id: string, opts?: { notifyStudent?: boolean }) => void
   results: TestResult[]
   addResult: (score: number, total: number) => void
   clearResults: () => void
@@ -167,7 +167,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const dropped = new Set(cloud.droppedMessageIds || [])
         setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
       }
-      if (cloud?.bookings) setBookings((prev) => mergeById(prev, cloud.bookings!))
+      if (cloud?.bookings) setBookings(cloud.bookings)
       if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
       if (Array.isArray(cloud?.results)) {
@@ -225,6 +225,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!cloud) return
       if (cloud.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
       if (cloud.notices) setNotices(cloud.notices)
+      if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
       if (cloud.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
         setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
@@ -558,8 +559,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       }),
     bookings,
-    addBooking: (b) => setBookings((list) => [...list, { ...b, id: uid() }]),
-    cancelBooking: (id) => setBookings((list) => list.filter((x) => x.id !== id)),
+    addBooking: (b) => {
+      const item = { ...b, id: uid() }
+      setBookings((list) => {
+        const next = [...list, item]
+        void saveSharedKey('bookings', next)
+        return next
+      })
+    },
+    cancelBooking: (id, opts) => {
+      setBookings((list) => {
+        const booking = list.find((x) => x.id === id)
+        const next = list.filter((x) => x.id !== id)
+        void saveSharedKey('bookings', next)
+        if (opts?.notifyStudent && booking?.studentId) {
+          const ins = instructors.find((i) => i.id === booking.instructorId)
+          const phone = ins?.phone || ''
+          const title: L = {
+            ru: 'Запись на вождение отменена',
+            kk: 'Жүргізу жазбасы бас тартылды',
+          }
+          const body: L = {
+            ru: `Ваша запись на ${booking.date} в ${booking.time} отменена администратором. Позвоните инструктору${phone ? `: ${phone}` : ''}.`,
+            kk: `${booking.date} ${booking.time} уақытындағы жазбаңыз әкімші тарапынан бас тартылды. Нұсқаушыға қоңырау шалыңыз${phone ? `: ${phone}` : ''}.`,
+          }
+          const n: Notice = {
+            id: uid(),
+            kind: 'info',
+            title,
+            body,
+            time: nowStamp(),
+            read: false,
+            studentId: booking.studentId,
+          }
+          setNotices((ns) => {
+            const nn = [n, ...ns]
+            void saveSharedKey('notices', nn)
+            return nn
+          })
+        }
+        return next
+      })
+    },
     results,
     addResult: (score, total) => {
       const item = {

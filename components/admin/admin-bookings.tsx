@@ -167,7 +167,7 @@ export function AdminBookings() {
                             variant="ghost"
                             size="icon"
                             aria-label={tl({ ru: 'Отменить', kk: 'Бас тарту' })}
-                            onClick={() => cancelBooking(b.id)}
+                            onClick={() => cancelBooking(b.id, { notifyStudent: true })}
                           >
                             <Trash2 className="size-4 text-destructive" />
                           </Button>
@@ -190,7 +190,7 @@ export function AdminBookings() {
                       <span>
                         {formatDate(b.date)}, {b.time} — {b.studentName || '—'}
                       </span>
-                      <Button variant="ghost" size="icon" onClick={() => cancelBooking(b.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => cancelBooking(b.id, { notifyStudent: true })}>
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </li>

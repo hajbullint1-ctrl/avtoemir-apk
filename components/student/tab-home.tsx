@@ -104,7 +104,7 @@ function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
 }
 
 export function TabHome() {
-  const { t, tl, me, school, setCategory, submitDocs, deleteMyAccount } = useStore()
+  const { t, tl, me, school, setCategory, submitDocs, deleteMyAccount, notices } = useStore()
 
   const statusIcon =
     me.status === 'approved' ? (
@@ -167,6 +167,24 @@ export function TabHome() {
           {tl({ ru: 'Политика конфиденциальности', kk: 'Құпиялылық саясаты' })}
         </a>
       </section>
+
+      {(() => {
+        const myNotices = notices.filter((n) => !n.studentId || n.studentId === me.id).slice(0, 5)
+        if (myNotices.length === 0) return null
+        return (
+          <Section title={tl({ ru: 'Уведомления', kk: 'Хабарландырулар' })}>
+            <ul className="flex flex-col gap-2">
+              {myNotices.map((n) => (
+                <li key={n.id} className="rounded-xl border bg-card p-3 text-sm">
+                  <p className="font-semibold">{tl(n.title)}</p>
+                  <p className="mt-1 text-muted-foreground">{tl(n.body)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{n.time}</p>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )
+      })()}
 
       <Section title={t('enrollment')}>
         <p className="mb-3 text-sm text-muted-foreground">{t('chooseCategory')}</p>

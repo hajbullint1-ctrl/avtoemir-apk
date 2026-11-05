@@ -483,7 +483,7 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.questions) tasks.push(saveMergedById('questions', slice.questions))
   if (slice.reviews) tasks.push(saveSharedKey('reviews', slice.reviews))
   if (slice.messages) tasks.push(saveSharedKey('messages', slice.messages))
-  if (slice.bookings) tasks.push(saveMergedById('bookings', slice.bookings))
+  if (slice.bookings) tasks.push(saveSharedKey('bookings', slice.bookings))
   if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
   if (slice.recovery) tasks.push(saveSharedKey('recovery', slice.recovery))
   if (slice.learnedSigns) {
