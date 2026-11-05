@@ -1,6 +1,7 @@
 'use client'
 
-import { CalendarCheck, Car, Phone, Trash2, User } from 'lucide-react'
+import { useState } from 'react'
+import { CalendarCheck, Car, Eraser, Phone, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 
@@ -18,12 +19,16 @@ function formatDate(date: string) {
 
 export function AdminBookings() {
   const { bookings, instructors, students, cancelBooking, tl } = useStore()
+  const [cleared, setCleared] = useState(false)
 
   const sorted = [...bookings].sort((a, b) => {
     const ka = `${a.date}T${a.time}`
     const kb = `${b.date}T${b.time}`
     return ka.localeCompare(kb)
   })
+
+  /** Старые записи без привязки к ученику */
+  const anonymous = sorted.filter((b) => !b.studentId)
 
   const byInstructor = instructors.map((ins) => ({
     ins,
@@ -32,18 +37,56 @@ export function AdminBookings() {
 
   const orphan = sorted.filter((b) => !instructors.some((i) => i.id === b.instructorId))
 
+  const clearAnonymous = () => {
+    if (anonymous.length === 0) return
+    const ok = window.confirm(
+      tl({
+        ru: `Удалить ${anonymous.length} старых записей без ученика? Это нельзя отменить.`,
+        kk: `${anonymous.length} оқушысыз ескі жазбаны жою керек пе? Қайтару мүмкін емес.`,
+      }),
+    )
+    if (!ok) return
+    for (const b of anonymous) cancelBooking(b.id)
+    setCleared(true)
+    setTimeout(() => setCleared(false), 2000)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-2xl border bg-card p-5">
-        <h2 className="mb-1 text-lg font-semibold">
-          {tl({ ru: 'Записи на вождение', kk: 'Жүргізу жазбалары' })}
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {tl({
-            ru: 'Кто к какому инструктору записался и на какое время',
-            kk: 'Кім қай нұсқаушыға және қай уақытқа жазылған',
-          })}
-        </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="mb-1 text-lg font-semibold">
+              {tl({ ru: 'Записи на вождение', kk: 'Жүргізу жазбалары' })}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {tl({
+                ru: 'Кто к какому инструктору записался и на какое время',
+                kk: 'Кім қай нұсқаушыға және қай уақытқа жазылған',
+              })}
+            </p>
+          </div>
+          {anonymous.length > 0 ? (
+            <Button type="button" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={clearAnonymous}>
+              <Eraser className="size-4" aria-hidden="true" />
+              {cleared
+                ? tl({ ru: 'Очищено', kk: 'Тазаланды' })
+                : tl({
+                    ru: `Очистить старые (${anonymous.length})`,
+                    kk: `Ескілерін тазалау (${anonymous.length})`,
+                  })}
+            </Button>
+          ) : null}
+        </div>
+
+        {anonymous.length > 0 ? (
+          <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+            {tl({
+              ru: `Есть ${anonymous.length} записей без ученика (старые). Ученикам они больше не показываются. Можно удалить кнопкой выше.`,
+              kk: `${anonymous.length} оқушысыз жазба бар (ескі). Оқушыларға көрсетілмейді. Жоғарыдағы батырмамен жоюға болады.`,
+            })}
+          </div>
+        ) : null}
 
         {sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -93,16 +136,22 @@ export function AdminBookings() {
                         students.find((s) => s.name && s.name === b.studentName)
                       const name = b.studentName || student?.name || tl({ ru: 'Ученик', kk: 'Оқушы' })
                       const phone = b.studentPhone || student?.phone || ''
+                      const isAnon = !b.studentId
                       return (
                         <li key={b.id} className="flex items-center gap-3 px-4 py-3">
                           <CalendarCheck className="size-5 shrink-0 text-primary" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold">
                               {formatDate(b.date)}, {b.time}
+                              {isAnon ? (
+                                <span className="ml-2 rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+                                  {tl({ ru: 'без ученика', kk: 'оқушысыз' })}
+                                </span>
+                              ) : null}
                             </p>
                             <p className="flex items-center gap-1 text-sm">
                               <User className="size-3.5 text-muted-foreground" />
-                              {name}
+                              {isAnon ? tl({ ru: 'Неизвестно', kk: 'Белгісіз' }) : name}
                             </p>
                             {phone ? (
                               <a
