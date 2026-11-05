@@ -52,8 +52,21 @@ function BookingForm() {
   const [done, setDone] = useState(false)
   const instructor = instructors.find((i) => i.id === instructorId) ?? list[0]
 
+  if (!list.length || !instructor) {
+    return (
+      <Section title={t('booking')}>
+        <p className="text-sm text-muted-foreground">
+          {lang === 'kk'
+            ? 'Әзірге нұсқаушылар жоқ. Әкімшіден нұсқаушыларды қосуды сұраңыз.'
+            : 'Пока нет инструкторов. Попросите администратора добавить инструкторов.'}
+        </p>
+      </Section>
+    )
+  }
+
   const taken = (slot: string) =>
-    isBusy(date, slot, instructor.id) || bookings.some((b) => b.date === date && b.time === slot && b.instructorId === instructor.id)
+    isBusy(date, slot, instructor.id) ||
+    bookings.some((b) => b.date === date && b.time === slot && b.instructorId === instructor.id)
 
   return (
     <>
@@ -133,32 +146,34 @@ function BookingForm() {
 
         <h3 className="mb-2 text-sm font-medium text-muted-foreground">{t('chooseTime')}</h3>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t('chooseTime')}>
-          {instructor.slots.map((slot) => {
-            const busy = taken(slot)
-            return (
-              <button
-                key={slot}
-                type="button"
-                role="radio"
-                aria-checked={time === slot}
-                disabled={busy}
-                onClick={() => setTime(slot)}
-                className={cn(
-                  'rounded-lg border py-2 text-sm font-semibold tabular-nums transition-colors',
-                  busy && 'cursor-not-allowed bg-muted text-muted-foreground line-through',
-                  !busy && time === slot && 'border-primary bg-primary text-primary-foreground',
-                  !busy && time !== slot && 'hover:border-primary/50',
-                )}
-              >
-                {slot}
-                {busy && <span className="sr-only"> ({t('slotTaken')})</span>}
-              </button>
-            )
-          })}
+          {(instructor.slots?.length ? instructor.slots : ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00']).map(
+            (slot) => {
+              const busy = taken(slot)
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  role="radio"
+                  aria-checked={time === slot}
+                  disabled={busy}
+                  onClick={() => setTime(slot)}
+                  className={cn(
+                    'rounded-lg border py-2.5 text-sm font-semibold tabular-nums transition-colors active:scale-[0.98]',
+                    busy && 'cursor-not-allowed bg-muted text-muted-foreground line-through',
+                    !busy && time === slot && 'border-primary bg-primary text-primary-foreground',
+                    !busy && time !== slot && 'bg-card hover:border-primary/50',
+                  )}
+                >
+                  {slot}
+                  {busy && <span className="sr-only"> ({t('slotTaken')})</span>}
+                </button>
+              )
+            },
+          )}
         </div>
 
         <Button
-          className="mt-4 h-11 w-full"
+          className="mt-4 h-12 w-full text-base"
           disabled={!time}
           onClick={() => {
             if (!time) return
@@ -168,9 +183,14 @@ function BookingForm() {
             setTimeout(() => setDone(false), 2500)
           }}
         >
-          <CalendarCheck className="size-4" aria-hidden="true" />
+          <CalendarCheck className="size-5" aria-hidden="true" />
           {done ? t('booked') : t('confirmBooking')}
         </Button>
+        {!time ? (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            {lang === 'kk' ? 'Уақытты таңдаңыз, содан кейін «Жазылу» басыңыз' : 'Выберите время, затем нажмите «Записаться»'}
+          </p>
+        ) : null}
       </Section>
 
       <Section title={t('myLessons')}>
@@ -256,6 +276,20 @@ function RangeMap() {
       </Section>
 
       <Section title={t('examRoutes')}>
+        <div className="mb-3 rounded-xl border border-primary/20 bg-accent/40 p-3">
+          <p className="flex items-start gap-2 text-sm leading-snug">
+            <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>
+              <span className="font-semibold">
+                {tl({ ru: 'Адрес экзамена:', kk: 'Емтихан мекенжайы:' })}
+              </span>{' '}
+              {tl({
+                ru: 'Специализированный отдел г. Туркестан по обслуживанию населения, Қазыбек би улица, 9/9, с. 30 лет Казахстана, район Сауран, Туркестанская область, 161223',
+                kk: 'Түркістан қ. халыққа қызмет көрсетудің мамандандырылған бөлімі, Қазыбек би көшесі, 9/9, Қазақстанның 30 жылдығы а., Сауран ауданы, Түркістан облысы, 161223',
+              })}
+            </span>
+          </p>
+        </div>
         <div className="flex flex-col gap-3">
           {examRoutes.map((r) => (
             <div key={r.id} className="rounded-xl border p-3">
@@ -263,6 +297,12 @@ function RangeMap() {
                 <Route className="size-4 text-primary" aria-hidden="true" />
                 {tl(r.name)}
               </h3>
+              {r.address ? (
+                <p className="mb-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  {tl(r.address)}
+                </p>
+              ) : null}
               <ol className="relative ml-2 border-l-2 border-dashed border-primary/30 pl-4">
                 {r.steps.map((s, i) => (
                   <li key={i} className="relative pb-2 text-sm last:pb-0">
