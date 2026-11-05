@@ -125,14 +125,15 @@ function Chat() {
 }
 
 function Notifications() {
-  const { t, tl, notices, markNoticesRead } = useStore()
+  const { t, tl, notices, markNoticesRead, me } = useStore()
+  const myNotices = notices.filter((n) => !n.studentId || n.studentId === me.id)
   const icons: Record<string, typeof Bell> = {
     lesson: CalendarClock,
     docs: FileCheck2,
     info: Info,
     announce: Megaphone,
   }
-  const unread = notices.filter((n) => !n.read).length
+  const unread = myNotices.filter((n) => !n.read).length
   return (
     <Section
       title={
@@ -154,7 +155,7 @@ function Notifications() {
       }
     >
       <ul className="flex flex-col gap-2">
-        {notices.map((n) => {
+        {myNotices.map((n) => {
           const Icon = icons[n.kind] ?? Bell
           return (
             <li key={n.id} className={cn('flex gap-3 rounded-xl border p-3', !n.read && 'border-primary/40 bg-accent/60')}>

@@ -25,11 +25,11 @@ const tabs: { id: string; label: DictKey; icon: typeof House; Comp: () => React.
 ]
 
 export function StudentApp() {
-  const { t, notices, session, ready, logout, tl, maintenanceMode } = useStore()
+  const { t, notices, session, ready, logout, tl, maintenanceMode, me } = useStore()
   const [active, setActive] = useState('home')
   const mainRef = useRef<HTMLElement>(null)
   const current = tabs.find((x) => x.id === active)!
-  const unread = notices.filter((n) => !n.read).length
+  const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id) && !n.read).length
 
   if (!ready) {
     return (
