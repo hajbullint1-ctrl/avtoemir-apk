@@ -9,6 +9,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.widget.RemoteViews;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class CertificateWidgetProvider extends AppWidgetProvider {
     public static void refresh(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
@@ -29,20 +33,22 @@ public class CertificateWidgetProvider extends AppWidgetProvider {
         String status = prefs.getString(CertificateWidgetStore.KEY_STATUS, "");
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_certificate);
+        String now = new SimpleDateFormat("dd.MM.yyyy HH:mm", new Locale("ru")).format(new Date());
         if (!loggedIn || name == null || name.trim().isEmpty()) {
-            views.setTextViewText(R.id.widget_school, "AvtoEmir");
+            views.setTextViewText(R.id.widget_school, school == null || school.isEmpty() ? "AvtoEmir" : school);
             views.setTextViewText(R.id.widget_name, "Войдите в приложение");
             views.setTextViewText(R.id.widget_status, "Сертификат появится после входа");
             views.setTextColor(R.id.widget_status, 0xFF64748B);
             views.setTextViewText(R.id.widget_number, "№ —");
-            views.setTextViewText(R.id.widget_date, "—");
+            // Always show current date/time so the widget is not empty
+            views.setTextViewText(R.id.widget_date, now);
         } else {
             views.setTextViewText(R.id.widget_school, school == null || school.isEmpty() ? "AvtoEmir" : school);
             views.setTextViewText(R.id.widget_name, name);
             views.setTextViewText(R.id.widget_status, status == null || status.isEmpty() ? "—" : status);
             views.setTextColor(R.id.widget_status, statusColor(status));
             views.setTextViewText(R.id.widget_number, number == null || number.isEmpty() ? "№ —" : "№ " + number);
-            views.setTextViewText(R.id.widget_date, date == null || date.isEmpty() ? "—" : date);
+            views.setTextViewText(R.id.widget_date, date == null || date.isEmpty() ? now : date);
         }
 
         Intent open = new Intent(context, MainActivity.class);
