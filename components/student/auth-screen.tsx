@@ -114,8 +114,8 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       <div className="flex h-dvh w-full flex-col overflow-hidden bg-background md:h-[min(880px,calc(100dvh-3rem))] md:max-w-[420px] md:rounded-[2.25rem] md:border-[6px] md:border-foreground/90 md:shadow-2xl">
         <header className="app-safe-header flex shrink-0 items-center justify-between gap-2 bg-primary px-4 pb-3 text-primary-foreground">
           <div className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary-foreground text-primary">
-              <Car className="size-5" aria-hidden="true" />
+            <span className="flex size-9 items-center justify-center overflow-hidden rounded-xl bg-primary-foreground">
+              <img src="/icon-192.png" alt="AvtoEmir" className="size-9 object-cover" />
             </span>
             <div className="leading-tight">
               <p className="text-base font-extrabold tracking-tight">AvtoEmir</p>
