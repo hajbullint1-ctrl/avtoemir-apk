@@ -115,6 +115,23 @@ export function AuthScreen() {
                 })}
             </p>
           </div>
+
+          {mode === 'login' && (
+            <div className="mb-5 rounded-xl border border-primary/20 bg-accent/40 p-3.5 text-sm leading-relaxed text-foreground">
+              <p>
+                {lang === 'kk'
+                  ? 'Егер сіз «Авто-Эмир» автомектебінің оқушысы болсаңыз, кіру үшін телефон нөміріңізді енгізіңіз. Егер тіркелмеген болсаңыз, әкімшіге хабарласыңыз: '
+                  : 'Если вы ученик автошколы «Авто-Эмир», введите свой номер телефона для входа. Если вы еще не зарегистрированы или вашего номера нет в системе, обратитесь к администратору: '}
+                <a
+                  href="tel:87083425171"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  87083425171
+                </a>
+              </p>
+            </div>
+          )}
+
           <form onSubmit={onSubmit} className="flex flex-col gap-3">
             {mode === 'register' && (
               <label className="flex flex-col gap-1.5">

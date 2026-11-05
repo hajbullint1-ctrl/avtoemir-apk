@@ -27,8 +27,9 @@ const tabs: { id: string; label: DictKey; icon: typeof House; Comp: () => React.
 export function StudentApp() {
   const { t, notices, session, ready, logout, tl, maintenanceMode, me } = useStore()
   const [active, setActive] = useState('home')
+  const [showAbout, setShowAbout] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
-  const current = tabs.find((x) => x.id === active)!
+  const isGuest = !session || session.accountId === 'guest_play_review'
   const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id) && !n.read).length
 
   if (!ready) {
@@ -39,7 +40,52 @@ export function StudentApp() {
     )
   }
 
-  if (!session) return <AuthScreen />
+  // Unauthenticated or guest: only login screen + public "About"
+  if (isGuest) {
+    if (showAbout) {
+      return (
+        <div className="flex min-h-dvh flex-col bg-muted/60 md:items-center md:justify-center md:p-6">
+          <div className="flex h-dvh w-full flex-col overflow-hidden bg-background md:h-[min(880px,calc(100dvh-3rem))] md:max-w-[420px] md:rounded-[2.25rem] md:border-[6px] md:border-foreground/90 md:shadow-2xl">
+            <header className="app-safe-header flex shrink-0 items-center justify-between gap-2 bg-primary px-4 pb-3 text-primary-foreground">
+              <div className="flex items-center gap-2">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-primary-foreground text-primary">
+                  <Info className="size-5" aria-hidden="true" />
+                </span>
+                <div className="leading-tight">
+                  <p className="text-base font-extrabold tracking-tight">AvtoEmir</p>
+                  <p className="text-[11px] opacity-80">{tl({ ru: 'О нас', kk: 'Біз туралы' })}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAbout(false)}
+                className="rounded-full bg-primary-foreground/15 px-3 py-1.5 text-xs font-medium hover:bg-primary-foreground/25"
+              >
+                {tl({ ru: 'Ко входу', kk: 'Кіруге' })}
+              </button>
+            </header>
+            <main className="flex-1 overflow-y-auto px-4 py-4">
+              <TabAbout />
+            </main>
+          </div>
+        </div>
+      )
+    }
+    return (
+      <div className="relative">
+        <AuthScreen />
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center md:bottom-8">
+          <button
+            type="button"
+            onClick={() => setShowAbout(true)}
+            className="pointer-events-auto rounded-full border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-md hover:bg-muted"
+          >
+            {tl({ ru: 'О нас', kk: 'Біз туралы' })}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (maintenanceMode) {
     return (
@@ -68,6 +114,8 @@ export function StudentApp() {
       </div>
     )
   }
+
+  const current = tabs.find((x) => x.id === active) ?? tabs[0]
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/60 md:items-center md:justify-center md:p-6">
