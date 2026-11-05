@@ -1,7 +1,7 @@
 import type { L } from './i18n'
 
-export type Category = 'B' | 'B1' | 'C' | 'C1'
-export const CATEGORIES: Category[] = ['B', 'B1', 'C', 'C1']
+export type Category = 'A' | 'A1' | 'B' | 'B1' | 'C' | 'C1' | 'E' | 'E1'
+export const CATEGORIES: Category[] = ['A', 'A1', 'B', 'B1', 'C', 'C1', 'E', 'E1']
 
 export type DocKey = 'idFront' | 'idBack' | 'psycho' | 'narco'
 export const DOC_KEYS: DocKey[] = ['idFront', 'idBack', 'psycho', 'narco']
@@ -118,8 +118,8 @@ export const seedSchoolRoutes: SchoolRoute[] = [
 export const seedSchool: School = {
   name: 'AvtoEmir',
   about: {
-    ru: 'Автошкола AvtoEmir — обучение вождению категорий B, B1, C, C1 в Туркестане и Карнаке.',
-    kk: 'AvtoEmir автомектебі — Түркістан мен Қарнақта B, B1, C, C1 санаттары бойынша жүргізуге оқыту.',
+    ru: 'Автошкола AvtoEmir — обучение вождению категорий A, A1, B, B1, C, C1, E, E1 в Туркестане и Карнаке.',
+    kk: 'AvtoEmir автомектебі — Түркістан мен Қарнақта A, A1, B, B1, C, C1, E, E1 санаттары бойынша жүргізуге оқыту.',
   },
   hours: { ru: 'Пн–Сб 9:00–18:00', kk: 'Дс–Сб 9:00–18:00' },
   phones: ['+7 701 000 00 00'],

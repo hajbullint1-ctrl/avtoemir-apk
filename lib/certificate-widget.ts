@@ -31,10 +31,18 @@ export function certificateNumberFromId(accountId: string): string {
 
 function formatDate(raw: string): string {
   if (!raw) return '—'
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T09:00:00` : raw
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return raw
-  return date.toLocaleDateString('ru-RU')
+  // Date-only readyDate → date; datetime → date + time
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return date.toLocaleDateString('ru-RU')
+  }
+  return date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function nowLabel(): string {
+  return new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 /** Push the signed-in student's certificate into the Android home-screen widget. No-op on web/iOS. */
@@ -53,7 +61,7 @@ export async function syncCertificateWidget(input: {
       fullName: input.loggedIn ? input.fullName : '',
       schoolName: input.schoolName || 'AvtoEmir',
       certificateNumber: input.loggedIn ? certificateNumberFromId(input.accountId) : '',
-      date: input.loggedIn ? formatDate(input.date) : '—',
+      date: input.loggedIn ? (formatDate(input.date) || nowLabel()) : nowLabel(),
       status: input.loggedIn ? STATUS_LABEL[input.status] || input.status || '—' : 'Войдите в приложение',
     })
   } catch (error) {
