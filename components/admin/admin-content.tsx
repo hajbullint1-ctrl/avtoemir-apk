@@ -438,10 +438,11 @@ export function InstructorsEditor() {
       <form className="flex flex-col gap-3 rounded-xl border border-dashed p-3" onSubmit={(e) => {
         e.preventDefault()
         if (!name.trim()) return
-        setInstructors([...instructors, { id: uid(), name: name.trim(), phone: phone.trim(), car: car.trim(), categories: cats, slots: [] }])
+        setInstructors([...instructors, { id: uid(), name: name.trim(), phone: phone.trim(), car: car.trim(), categories: cats.length ? cats : ['B'], slots: [] }])
         setName('')
         setPhone('')
         setCar('')
+        setCats(['B'])
       }}>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={tl({ ru: 'Имя', kk: 'Аты' })}>
@@ -453,6 +454,27 @@ export function InstructorsEditor() {
           <Field label={tl({ ru: 'Автомобиль', kk: 'Автокөлік' })}>
             <input value={car} onChange={(e) => setCar(e.target.value)} className={inputCls} />
           </Field>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">{tl({ ru: 'Категории', kk: 'Санаттар' })}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.map((c) => {
+              const on = cats.includes(c)
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCats((prev) => (on ? (prev.length > 1 ? prev.filter((x) => x !== c) : prev) : [...prev, c]))}
+                  className={cn(
+                    'rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors',
+                    on ? 'border-primary bg-accent text-primary' : 'text-muted-foreground hover:border-primary/40',
+                  )}
+                >
+                  {c}
+                </button>
+              )
+            })}
+          </div>
         </div>
         <Button type="submit" className="self-start">
           <Plus className="size-4" />
@@ -522,106 +544,59 @@ export function RoadSignsEditor() {
   }
 
   const save = () => {
-    if (!draft.code?.trim() || !draft.name.ru.trim()) return
+    if (!(draft.code || '').trim() || !(draft.name?.ru || '').trim()) return
     const payload: RoadSign = {
       id: editingId || uid(),
-      code: draft.code.trim(),
-      shape: (draft.shape as SignShape) || 'prohibit',
+      code: (draft.code || '').trim(),
+      shape: (draft.shape || 'prohibit') as SignShape,
       symbol: draft.symbol || '',
-      name: { ru: draft.name.ru.trim(), kk: draft.name.kk.trim() || draft.name.ru.trim() },
-      meaning: { ru: draft.meaning.ru.trim(), kk: draft.meaning.kk.trim() || draft.meaning.ru.trim() },
+      name: { ru: (draft.name?.ru || '').trim(), kk: (draft.name?.kk || '').trim() || (draft.name?.ru || '').trim() },
+      meaning: { ru: (draft.meaning?.ru || '').trim(), kk: (draft.meaning?.kk || '').trim() || (draft.meaning?.ru || '').trim() },
       imageUrl: draft.imageUrl || null,
     }
-    if (editingId) {
-      setRoadSigns(roadSigns.map((x) => (x.id === editingId ? payload : x)))
-    } else {
-      setRoadSigns([...roadSigns, payload])
-    }
+    if (editingId) setRoadSigns(roadSigns.map((x) => (x.id === editingId ? payload : x)))
+    else setRoadSigns([...roadSigns, payload])
     cancel()
   }
 
   return (
-    <Card title={tl({ ru: 'Дорожные знаки (карточки)', kk: 'Жол белгілері (карточкалар)' })}>
+    <Card title={tl({ ru: 'Дорожные знаки', kk: 'Жол белгілері' })}>
       <ul className="mb-4 flex flex-col gap-2">
         {roadSigns.map((s) => (
           <li key={s.id} className="flex items-center gap-3 rounded-xl border p-3">
-            {s.imageUrl ? (
-              <img src={s.imageUrl} alt="" className="size-12 rounded border object-contain" />
-            ) : (
-              <span className="flex size-12 items-center justify-center rounded border bg-muted text-xs">{s.code}</span>
-            )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{s.code} — {tl(s.name)}</p>
-              <p className="truncate text-xs text-muted-foreground">{tl(s.meaning)}</p>
+              <p className="text-sm font-semibold">{s.code} · {tl(s.name)}</p>
+              <p className="text-xs text-muted-foreground">{tl(s.meaning)}</p>
             </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(s)}>
-              {tl({ ru: 'Изменить', kk: 'Өзгерту' })}
-            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => startEdit(s)}>{tl({ ru: 'Изменить', kk: 'Өзгерту' })}</Button>
             <Button type="button" variant="ghost" size="icon" onClick={() => setRoadSigns(roadSigns.filter((x) => x.id !== s.id))}>
               <Trash2 className="size-4 text-destructive" />
             </Button>
           </li>
         ))}
-        {roadSigns.length === 0 && (
-          <li className="text-sm text-muted-foreground">{tl({ ru: 'Пока нет знаков', kk: 'Әзірге белгі жоқ' })}</li>
-        )}
       </ul>
-
       <div className="flex flex-col gap-3 rounded-xl border border-dashed p-3">
-        <h3 className="text-sm font-semibold">
-          {editingId ? tl({ ru: 'Редактирование знака', kk: 'Белгіні өңдеу' }) : tl({ ru: 'Новый знак', kk: 'Жаңа белгі' })}
-        </h3>
-        <Field label={tl({ ru: 'Код знака', kk: 'Белгі коды' })}>
-          <input value={draft.code || ''} onChange={(e) => setDraft({ ...draft, code: e.target.value })} className={inputCls} placeholder="2.5" />
-        </Field>
-        <BiInput label={tl({ ru: 'Название', kk: 'Атауы' })} value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
-        <BiInput label={tl({ ru: 'Описание / значение', kk: 'Сипаттама / мағынасы' })} value={draft.meaning} onChange={(meaning) => setDraft({ ...draft, meaning })} multiline />
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-muted-foreground">{tl({ ru: 'Фото знака', kk: 'Белгі фотосы' })}</span>
-          {draft.imageUrl ? (
-            <div className="relative inline-block">
-              <img src={draft.imageUrl} alt="" className="max-h-40 rounded-lg border object-contain" />
-              <Button type="button" variant="secondary" size="icon" className="absolute right-1 top-1 size-8" onClick={() => setDraft({ ...draft, imageUrl: null })}>
-                <X className="size-4" />
-              </Button>
-            </div>
-          ) : (
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted/40">
-              <ImagePlus className="size-4" />
-              {busy ? tl({ ru: 'Загрузка…', kk: 'Жүктелуде…' }) : tl({ ru: 'Загрузить фото', kk: 'Фото жүктеу' })}
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                disabled={busy}
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]
-                  e.target.value = ''
-                  if (!f) return
-                  setBusy(true)
-                  try {
-                    const url = await uploadTheoryCard(f)
-                    setDraft({ ...draft, imageUrl: url })
-                  } catch {
-                    // ignore
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              />
-            </label>
-          )}
+        <h3 className="text-sm font-semibold">{editingId ? tl({ ru: 'Редактирование знака', kk: 'Белгіні өңдеу' }) : tl({ ru: 'Новый знак', kk: 'Жаңа белгі' })}</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={tl({ ru: 'Код', kk: 'Код' })}>
+            <input value={draft.code || ''} onChange={(e) => setDraft({ ...draft, code: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label={tl({ ru: 'Символ', kk: 'Таңба' })}>
+            <input value={draft.symbol || ''} onChange={(e) => setDraft({ ...draft, symbol: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label={tl({ ru: 'Форма', kk: 'Пішін' })}>
+            <select value={draft.shape || 'prohibit'} onChange={(e) => setDraft({ ...draft, shape: e.target.value as SignShape })} className={inputCls}>
+              {(['prohibit', 'warning', 'mandatory', 'info', 'stop', 'yield'] as SignShape[]).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
         </div>
+        <BiInput label={tl({ ru: 'Название', kk: 'Атауы' })} value={draft.name || emptyL()} onChange={(name) => setDraft({ ...draft, name })} />
+        <BiInput label={tl({ ru: 'Значение', kk: 'Мағынасы' })} value={draft.meaning || emptyL()} onChange={(meaning) => setDraft({ ...draft, meaning })} multiline />
         <div className="flex gap-2">
-          <Button type="button" onClick={save}>
-            <Save className="size-4" />
-            {tl({ ru: 'Сохранить', kk: 'Сақтау' })}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="outline" onClick={cancel}>
-              {tl({ ru: 'Отмена', kk: 'Болдырмау' })}
-            </Button>
-          )}
+          <Button type="button" onClick={save}>{tl({ ru: 'Сохранить', kk: 'Сақтау' })}</Button>
+          {editingId && <Button type="button" variant="outline" onClick={cancel}>{tl({ ru: 'Отмена', kk: 'Болдырмау' })}</Button>}
         </div>
       </div>
     </Card>
