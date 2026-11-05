@@ -17,14 +17,20 @@ export type Student = {
   status: DocStatus
   readyDate: string | null
   submittedAt: string | null
-  /** ISO timestamp — last local write wins on sync */
   updatedAt?: string
-  /** Hidden from main student list; kept in cloud for history */
   archived?: boolean
   archivedAt?: string | null
 }
 
 export type Branch = { id: string; city: L; address: L; link: string }
+
+/** Учебный маршрут автошколы (редактируется в админке) */
+export type SchoolRoute = {
+  id: string
+  name: L
+  steps: L[]
+}
+
 export type School = {
   name: string
   about: L
@@ -35,6 +41,10 @@ export type School = {
   branches: Branch[]
   instagram: string
   website: string
+  /** Адрес спец. отдела для экзамена */
+  examAddress?: L
+  /** Наши учебные маршруты */
+  routes?: SchoolRoute[]
 }
 
 export type TheoryLesson = { id: string; title: L; body: L; imageUrl?: string | null }
@@ -54,7 +64,15 @@ export type Message = {
 
 export type Profile = { id: string; full_name: string; phone: string }
 export type Notice = { id: string; kind: 'lesson' | 'docs' | 'info' | 'announce'; title: L; body: L; time: string; read: boolean }
-export type Booking = { id: string; date: string; time: string; instructorId: string }
+export type Booking = {
+  id: string
+  date: string
+  time: string
+  instructorId: string
+  studentId?: string
+  studentName?: string
+  studentPhone?: string
+}
 export type TestResult = { id: string; date: string; score: number; total: number; studentId?: string; studentName?: string }
 
 export type SignShape = 'prohibit' | 'warning' | 'mandatory' | 'info' | 'stop' | 'yield'
@@ -70,6 +88,33 @@ export type RoadSign = {
 
 export const seedStudents: Student[] = []
 
+export const DEFAULT_EXAM_ADDRESS: L = {
+  ru: 'Специализированный отдел г. Туркестан по обслуживанию населения, Қазыбек би улица, 9/9, с. 30 лет Казахстана, район Сауран, Туркестанская область, 161223',
+  kk: 'Түркістан қ. халыққа қызмет көрсетудің мамандандырылған бөлімі, Қазыбек би көшесі, 9/9, Қазақстанның 30 жылдығы а., Сауран ауданы, Түркістан облысы, 161223',
+}
+
+export const seedSchoolRoutes: SchoolRoute[] = [
+  {
+    id: 'route-1',
+    name: { ru: 'Маршрут №1 — центр', kk: '№1 бағыт — орталық' },
+    steps: [
+      { ru: 'Старт у автошколы', kk: 'Автомектептен старт' },
+      { ru: 'Движение по центру города', kk: 'Қала орталығы бойынша жүру' },
+      { ru: 'Круговой маршрут и возврат', kk: 'Шеңберлі бағыт және қайту' },
+    ],
+  },
+  {
+    id: 'route-2',
+    name: { ru: 'Маршрут №2 — жилой район', kk: '№2 бағыт — тұрғын аудан' },
+    steps: [
+      { ru: 'Старт у автошколы', kk: 'Автомектептен старт' },
+      { ru: 'Выезд в жилой сектор', kk: 'Тұрғын секторға шығу' },
+      { ru: 'Перекрёстки и пешеходные зоны', kk: 'Қиылыстар мен жаяу аймақтар' },
+      { ru: 'Возврат к автошколе', kk: 'Автомектепке қайту' },
+    ],
+  },
+]
+
 export const seedSchool: School = {
   name: 'AvtoEmir',
   about: {
@@ -82,6 +127,8 @@ export const seedSchool: School = {
   phoneSupport: '+7 701 222 22 22',
   instagram: 'https://www.instagram.com/avtoshkola_turkestan_avtoemir',
   website: '',
+  examAddress: DEFAULT_EXAM_ADDRESS,
+  routes: seedSchoolRoutes,
   branches: [
     {
       id: 'turkestan',
@@ -140,7 +187,6 @@ export const seedQuestions: Question[] = [
   },
 ]
 
-/** Default instructors so booking works even before admin fills cloud data */
 export const seedInstructors: Instructor[] = [
   {
     id: 'ins-1',
@@ -172,39 +218,5 @@ export const seedReviews: Review[] = []
 export const seedMessages: Message[] = []
 export const seedNotices: Notice[] = []
 
-/** Exam routes + special department address in Turkestan */
-export const examRoutes: {
-  id: string
-  name: L
-  steps: L[]
-  address?: L
-}[] = [
-  {
-    id: 'route-1',
-    name: { ru: 'Маршрут №1 — центр', kk: '№1 бағыт — орталық' },
-    address: {
-      ru: 'Специализированный отдел г. Туркестан по обслуживанию населения, Қазыбек би улица, 9/9, с. 30 лет Казахстана, район Сауран, Туркестанская область, 161223',
-      kk: 'Түркістан қ. халыққа қызмет көрсетудің мамандандырылған бөлімі, Қазыбек би көшесі, 9/9, Қазақстанның 30 жылдығы а., Сауран ауданы, Түркістан облысы, 161223',
-    },
-    steps: [
-      { ru: 'Старт: ул. Қазыбек би, 9/9 (спец. отдел)', kk: 'Старт: Қазыбек би к., 9/9 (мамандандырылған бөлім)' },
-      { ru: 'Движение по ул. Қазыбек би до перекрёстка', kk: 'Қазыбек би к. бойымен қиылысқа дейін' },
-      { ru: 'Поворот и круг по району Сауран', kk: 'Бұрылыс және Сауран ауданы бойынша шеңбер' },
-      { ru: 'Возврат к точке старта', kk: 'Старт нүктесіне қайту' },
-    ],
-  },
-  {
-    id: 'route-2',
-    name: { ru: 'Маршрут №2 — жилой район', kk: '№2 бағыт — тұрғын аудан' },
-    address: {
-      ru: 'Специализированный отдел г. Туркестан по обслуживанию населения, Қазыбек би улица, 9/9, с. 30 лет Казахстана, район Сауран, Туркестанская область, 161223',
-      kk: 'Түркістан қ. халыққа қызмет көрсетудің мамандандырылған бөлімі, Қазыбек би көшесі, 9/9, Қазақстанның 30 жылдығы а., Сауран ауданы, Түркістан облысы, 161223',
-    },
-    steps: [
-      { ru: 'Старт у спец. отдела (Қазыбек би, 9/9)', kk: 'Старт мамандандырылған бөлімде (Қазыбек би, 9/9)' },
-      { ru: 'Выезд в жилой сектор с. 30 лет Казахстана', kk: 'Қазақстанның 30 жылдығы а. тұрғын секторына шығу' },
-      { ru: 'Проезд перекрёстков и пешеходных зон', kk: 'Қиылыстар мен жаяу аймақтардан өту' },
-      { ru: 'Финиш: возврат к спец. отделу', kk: 'Финиш: мамандандырылған бөлімге қайту' },
-    ],
-  },
-]
+/** @deprecated use school.routes — kept for compatibility */
+export const examRoutes: SchoolRoute[] = seedSchoolRoutes
