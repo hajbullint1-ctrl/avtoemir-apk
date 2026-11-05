@@ -12,10 +12,14 @@ import type { DictKey } from '@/lib/i18n'
 import { cn, toWhatsAppNumber } from '@/lib/utils'
 
 const categoryLabel: Record<Category, DictKey> = {
+  A: 'categoryA',
+  A1: 'categoryA1',
   B: 'categoryB',
   B1: 'categoryB1',
   C: 'categoryC',
   C1: 'categoryC1',
+  E: 'categoryE',
+  E1: 'categoryE1',
 }
 
 function UploadSlot({ docKey, label }: { docKey: DocKey; label: string }) {
