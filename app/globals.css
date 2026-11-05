@@ -132,7 +132,9 @@
   }
 }
 
-/* Android status bar: viewport-fit=cover is set in app/layout.tsx */
+/* Android / iOS status bar: viewport-fit=cover is set in app/layout.tsx.
+   On many Capacitor WebViews env(safe-area-inset-top) is 0, so we keep a
+   solid minimum so the logo and language switcher sit below the system bar. */
 .app-safe-header {
-  padding-top: max(20px, env(safe-area-inset-top));
+  padding-top: max(36px, env(safe-area-inset-top, 36px));
 }
