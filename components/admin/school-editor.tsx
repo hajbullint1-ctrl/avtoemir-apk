@@ -92,7 +92,25 @@ export function SchoolEditor() {
     setDraft((d) => ({ ...d, ...p }))
   }
   return (
-    <Card title={tl({ ru: 'Информация об автошколе', kk: 'Автомектеп туралы ақпарат' })} action={<SaveButton onClick={() => { setSchool(draft); setDirty(false) }} />}>
+    <Card title={tl({ ru: 'Информация об автошколе', kk: 'Автомектеп туралы ақпарат' })} action={<SaveButton onClick={() => {
+        const payload = {
+          ...school,
+          ...draft,
+          name: (draft.name || '').trim() || school.name,
+          about: draft.about,
+          hours: draft.hours,
+          phones: draft.phones?.length ? draft.phones : school.phones,
+          phoneEnrollment: draft.phoneEnrollment ?? '',
+          phoneSupport: draft.phoneSupport ?? '',
+          instagram: draft.instagram ?? '',
+          website: draft.website ?? '',
+          branches: draft.branches?.length ? draft.branches : school.branches,
+          examAddress: draft.examAddress ?? school.examAddress,
+          routes: draft.routes?.length ? draft.routes : school.routes,
+        }
+        setSchool(payload)
+        setDirty(false)
+      }} />}>
       <div className="flex flex-col gap-4">
         <Field label={tl({ ru: 'Название', kk: 'Атауы' })}>
           <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} className={inputCls} />
