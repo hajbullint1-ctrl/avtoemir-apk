@@ -201,12 +201,12 @@ function BookingForm() {
       </Section>
 
       <Section title={t('myLessons')}>
-        {bookings.filter((b) => !b.studentId || b.studentId === me.id).length === 0 ? (
+        {bookings.filter((b) => b.studentId === me.id).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('noLessons')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {bookings
-              .filter((b) => !b.studentId || b.studentId === me.id)
+              .filter((b) => b.studentId === me.id)
               .map((b) => {
               const ins = instructors.find((i) => i.id === b.instructorId)
               return (
@@ -287,7 +287,6 @@ function RangeMap() {
         </div>
       </Section>
 
-      {/* Только адрес экзамена */}
       <Section title={t('examRoutes')}>
         <div className="rounded-xl border border-primary/20 bg-accent/40 p-3">
           <p className="flex items-start gap-2 text-sm leading-snug">
@@ -302,7 +301,6 @@ function RangeMap() {
         </div>
       </Section>
 
-      {/* Отдельно — наши учебные маршруты */}
       <Section title={tl({ ru: 'Наши маршруты', kk: 'Біздің бағыттар' })}>
         <div className="flex flex-col gap-3">
           {routes.map((r) => (
