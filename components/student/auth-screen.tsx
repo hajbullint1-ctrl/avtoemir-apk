@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 
 type Mode = 'login' | 'register' | 'forgot' | 'request'
 
-export function AuthScreen() {
+export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
   const { login, register, loginAsGuest, lang, t, tl } = useStore()
   const [mode, setMode] = useState<Mode>('login')
   const [fullName, setFullName] = useState('')
@@ -341,6 +341,7 @@ export function AuthScreen() {
                   setBusy(true)
                   try {
                     loginAsGuest()
+                    onGuest?.()
                   } finally {
                     setBusy(false)
                   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { BookOpen, Car, ClipboardCheck, House, Info, LogOut, MessagesSquare } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -30,13 +30,13 @@ export function StudentApp() {
   const [showAbout, setShowAbout] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const isGuest = !session || session.accountId === 'guest_play_review'
-  const isPureGuest = session?.accountId === 'guest_play_review'
   const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id) && !n.read).length
 
-  // Guest mode → open public About
-  useEffect(() => {
-    if (isPureGuest && !showAbout) setShowAbout(true)
-  }, [isPureGuest, showAbout])
+  // Leave About / guest mode and return to the real login screen
+  const exitToLogin = () => {
+    setShowAbout(false)
+    if (session?.accountId === 'guest_play_review') logout()
+  }
 
   if (!ready) {
     return (
@@ -64,10 +64,10 @@ export function StudentApp() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowAbout(false)}
+                onClick={exitToLogin}
                 className="rounded-full bg-primary-foreground/15 px-3 py-1.5 text-xs font-medium hover:bg-primary-foreground/25"
               >
-                {tl({ ru: 'Войти', kk: 'Кіру' })}
+                {tl({ ru: 'К входу', kk: 'Кіруге' })}
               </button>
             </header>
             <main className="flex-1 overflow-y-auto px-4 py-4">
@@ -82,10 +82,10 @@ export function StudentApp() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setShowAbout(false)}
+                  onClick={exitToLogin}
                   className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 >
-                  {tl({ ru: 'Перейти ко входу', kk: 'Кіруге өту' })}
+                  {tl({ ru: 'Вернуться к входу', kk: 'Кіруге оралу' })}
                 </button>
               </div>
             </main>
@@ -102,7 +102,7 @@ export function StudentApp() {
                     <li key={tab.id}>
                       <button
                         type="button"
-                        onClick={() => { if (locked) setShowAbout(false) }}
+                        onClick={() => { if (locked) exitToLogin() }}
                         className={cn(
                           'flex w-full flex-col items-center gap-0.5 py-2 text-[10px] font-medium',
                           locked ? 'text-muted-foreground' : 'text-primary',
@@ -122,7 +122,7 @@ export function StudentApp() {
     }
     return (
       <div className="relative">
-        <AuthScreen />
+        <AuthScreen onGuest={() => setShowAbout(true)} />
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center md:bottom-8">
           <button
             type="button"
