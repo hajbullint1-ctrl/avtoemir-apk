@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
 import { HillDiagram, ParallelDiagram, SlalomDiagram } from './maneuver-diagrams'
 import { useStore } from '@/lib/store'
-import { examRoutes } from '@/lib/data'
+import { DEFAULT_EXAM_ADDRESS, seedSchoolRoutes } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
 const WEEKDAYS = {
@@ -177,7 +177,14 @@ function BookingForm() {
           disabled={!time}
           onClick={() => {
             if (!time) return
-            addBooking({ date, time, instructorId: instructor.id })
+            addBooking({
+              date,
+              time,
+              instructorId: instructor.id,
+              studentId: me.id,
+              studentName: me.name || undefined,
+              studentPhone: me.phone || undefined,
+            })
             setTime(null)
             setDone(true)
             setTimeout(() => setDone(false), 2500)
@@ -194,11 +201,13 @@ function BookingForm() {
       </Section>
 
       <Section title={t('myLessons')}>
-        {bookings.length === 0 ? (
+        {bookings.filter((b) => !b.studentId || b.studentId === me.id).length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('noLessons')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {bookings.map((b) => {
+            {bookings
+              .filter((b) => !b.studentId || b.studentId === me.id)
+              .map((b) => {
               const ins = instructors.find((i) => i.id === b.instructorId)
               return (
                 <li key={b.id} className="flex items-center gap-3 rounded-xl border p-3">
@@ -232,12 +241,15 @@ function BookingForm() {
 }
 
 function RangeMap() {
-  const { t, tl } = useStore()
+  const { t, tl, school } = useStore()
   const maneuvers = [
     { key: 'parallel' as const, Diagram: ParallelDiagram },
     { key: 'hill' as const, Diagram: HillDiagram },
     { key: 'slalom' as const, Diagram: SlalomDiagram },
   ]
+  const examAddress = school.examAddress || DEFAULT_EXAM_ADDRESS
+  const routes = school.routes?.length ? school.routes : seedSchoolRoutes
+
   return (
     <>
       <Section title={t('rangeMap')}>
@@ -275,34 +287,30 @@ function RangeMap() {
         </div>
       </Section>
 
+      {/* Только адрес экзамена */}
       <Section title={t('examRoutes')}>
-        <div className="mb-3 rounded-xl border border-primary/20 bg-accent/40 p-3">
+        <div className="rounded-xl border border-primary/20 bg-accent/40 p-3">
           <p className="flex items-start gap-2 text-sm leading-snug">
             <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
             <span>
               <span className="font-semibold">
-                {tl({ ru: 'Адрес экзамена:', kk: 'Емтихан мекенжайы:' })}
+                {tl({ ru: 'Адрес:', kk: 'Мекенжай:' })}
               </span>{' '}
-              {tl({
-                ru: 'Специализированный отдел г. Туркестан по обслуживанию населения, Қазыбек би улица, 9/9, с. 30 лет Казахстана, район Сауран, Туркестанская область, 161223',
-                kk: 'Түркістан қ. халыққа қызмет көрсетудің мамандандырылған бөлімі, Қазыбек би көшесі, 9/9, Қазақстанның 30 жылдығы а., Сауран ауданы, Түркістан облысы, 161223',
-              })}
+              {tl(examAddress)}
             </span>
           </p>
         </div>
+      </Section>
+
+      {/* Отдельно — наши учебные маршруты */}
+      <Section title={tl({ ru: 'Наши маршруты', kk: 'Біздің бағыттар' })}>
         <div className="flex flex-col gap-3">
-          {examRoutes.map((r) => (
+          {routes.map((r) => (
             <div key={r.id} className="rounded-xl border p-3">
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
                 <Route className="size-4 text-primary" aria-hidden="true" />
                 {tl(r.name)}
               </h3>
-              {r.address ? (
-                <p className="mb-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  {tl(r.address)}
-                </p>
-              ) : null}
               <ol className="relative ml-2 border-l-2 border-dashed border-primary/30 pl-4">
                 {r.steps.map((s, i) => (
                   <li key={i} className="relative pb-2 text-sm last:pb-0">
