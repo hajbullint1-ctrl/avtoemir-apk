@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BookOpen, Car, ClipboardCheck, House, Info, LogOut, MessagesSquare } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { ThemeToggle } from '@/components/shared/theme-toggle'
@@ -30,7 +30,13 @@ export function StudentApp() {
   const [showAbout, setShowAbout] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const isGuest = !session || session.accountId === 'guest_play_review'
+  const isPureGuest = session?.accountId === 'guest_play_review'
   const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id) && !n.read).length
+
+  // Guest mode → open public About
+  useEffect(() => {
+    if (isPureGuest && !showAbout) setShowAbout(true)
+  }, [isPureGuest, showAbout])
 
   if (!ready) {
     return (
@@ -61,12 +67,55 @@ export function StudentApp() {
                 onClick={() => setShowAbout(false)}
                 className="rounded-full bg-primary-foreground/15 px-3 py-1.5 text-xs font-medium hover:bg-primary-foreground/25"
               >
-                {tl({ ru: 'Ко входу', kk: 'Кіруге' })}
+                {tl({ ru: 'Войти', kk: 'Кіру' })}
               </button>
             </header>
             <main className="flex-1 overflow-y-auto px-4 py-4">
               <TabAbout />
+              <div className="mt-6 rounded-xl border border-primary/20 bg-accent/40 p-3 text-sm">
+                <p>
+                  {tl({
+                    ru: 'Чтобы записаться на вождение, проходить тесты и пользоваться личным кабинетом, войдите под своим номером ученика или подайте заявку. Администратор: ',
+                    kk: 'Жүргізуге жазылу, тесттер тапсыру және жеке кабинет үшін оқушы нөмірімен кіріңіз немесе өтініш беріңіз. Әкімші: ',
+                  })}
+                  <a href="tel:87083425171" className="font-semibold text-primary hover:underline">87083425171</a>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAbout(false)}
+                  className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                >
+                  {tl({ ru: 'Перейти ко входу', kk: 'Кіруге өту' })}
+                </button>
+              </div>
             </main>
+            <nav className="shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)]">
+              <ul className="grid grid-cols-3">
+                {[
+                  { id: 'home', label: tl({ ru: 'Главная', kk: 'Басты' }), icon: House },
+                  { id: 'about', label: tl({ ru: 'О нас', kk: 'Біз туралы' }), icon: Info },
+                  { id: 'login', label: tl({ ru: 'Вход', kk: 'Кіру' }), icon: LogOut },
+                ].map((tab) => {
+                  const Icon = tab.icon
+                  const locked = tab.id !== 'about'
+                  return (
+                    <li key={tab.id}>
+                      <button
+                        type="button"
+                        onClick={() => { if (locked) setShowAbout(false) }}
+                        className={cn(
+                          'flex w-full flex-col items-center gap-0.5 py-2 text-[10px] font-medium',
+                          locked ? 'text-muted-foreground' : 'text-primary',
+                        )}
+                      >
+                        <Icon className="size-5" />
+                        <span>{tab.label}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </nav>
           </div>
         </div>
       )

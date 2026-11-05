@@ -80,6 +80,7 @@ type Store = {
   deleteChat: (thread: string, studentId?: string) => void
   notices: Notice[]
   markNoticesRead: () => void
+  dismissNotice: (id: string) => void
   broadcastNotice: (title: L, body: L) => void
   deleteNotice: (id: string) => void
   bookings: Booking[]
@@ -543,7 +544,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     },
     notices,
-    markNoticesRead: () => {},
+    markNoticesRead: () => {
+      const sid = me.id
+      setNotices((list) => {
+        const next = list.map((n) => {
+          const mine = !n.studentId || n.studentId === sid
+          if (!mine || n.read) return n
+          return { ...n, read: true }
+        })
+        void saveSharedKey('notices', next)
+        return next
+      })
+    },
+    dismissNotice: (id) => {
+      const sid = me.id
+      setNotices((list) => {
+        const next = list
+          .map((n) => {
+            if (n.id !== id) return n
+            if (n.studentId && n.studentId === sid) return null
+            const dismissed = new Set(n.dismissedBy || [])
+            dismissed.add(sid)
+            return { ...n, dismissedBy: [...dismissed] }
+          })
+          .filter((n): n is Notice => n !== null)
+        void saveSharedKey('notices', next)
+        return next
+      })
+    },
     broadcastNotice: (title, body) => {
       const n: Notice = { id: uid(), kind: 'announce', title, body, time: nowStamp(), read: false }
       setNotices((list) => {

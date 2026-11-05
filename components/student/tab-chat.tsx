@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, CalendarClock, FileCheck2, Info, Megaphone, SendHorizontal, ShieldCheck } from 'lucide-react'
+import { Bell, CalendarClock, FileCheck2, Info, Megaphone, SendHorizontal, ShieldCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
@@ -125,8 +125,10 @@ function Chat() {
 }
 
 function Notifications() {
-  const { t, tl, notices, markNoticesRead, me } = useStore()
-  const myNotices = notices.filter((n) => !n.studentId || n.studentId === me.id)
+  const { t, tl, notices, markNoticesRead, dismissNotice, me } = useStore()
+  const myNotices = notices.filter(
+    (n) => (!n.studentId || n.studentId === me.id) && !(n.dismissedBy || []).includes(me.id),
+  )
   const icons: Record<string, typeof Bell> = {
     lesson: CalendarClock,
     docs: FileCheck2,
@@ -147,9 +149,13 @@ function Notifications() {
       }
       action={
         unread > 0 ? (
-          <button type="button" onClick={markNoticesRead} className="text-xs font-medium text-primary hover:underline">
+          <button
+            type="button"
+            onClick={markNoticesRead}
+            className="rounded-md px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+            aria-label={tl({ ru: 'Отметить все прочитанными', kk: 'Барлығын оқылған деп белгілеу' })}
+          >
             ✓✓
-            <span className="sr-only">Прочитано</span>
           </button>
         ) : undefined
       }
@@ -167,6 +173,14 @@ function Notifications() {
                 <p className="text-sm text-muted-foreground">{tl(n.body)}</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">{n.time}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => dismissNotice(n.id)}
+                className="shrink-0 rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                aria-label={tl({ ru: 'Удалить уведомление', kk: 'Хабарландыруды жою' })}
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
             </li>
           )
         })}

@@ -63,7 +63,7 @@ export type Message = {
 }
 
 export type Profile = { id: string; full_name: string; phone: string }
-export type Notice = { id: string; kind: 'lesson' | 'docs' | 'info' | 'announce'; title: L; body: L; time: string; read: boolean; studentId?: string }
+export type Notice = { id: string; kind: 'lesson' | 'docs' | 'info' | 'announce'; title: L; body: L; time: string; read: boolean; studentId?: string; dismissedBy?: string[] }
 export type Booking = {
   id: string
   date: string

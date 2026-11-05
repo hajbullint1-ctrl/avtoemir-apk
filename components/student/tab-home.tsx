@@ -169,7 +169,9 @@ export function TabHome() {
       </section>
 
       {(() => {
-        const myNotices = notices.filter((n) => !n.studentId || n.studentId === me.id).slice(0, 5)
+        const myNotices = notices.filter(
+          (n) => (!n.studentId || n.studentId === me.id) && !(n.dismissedBy || []).includes(me.id),
+        ).slice(0, 5)
         if (myNotices.length === 0) return null
         return (
           <Section title={tl({ ru: 'Уведомления', kk: 'Хабарландырулар' })}>
