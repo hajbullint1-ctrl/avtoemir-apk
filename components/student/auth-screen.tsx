@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
+import { submitRegistrationRequest } from '@/lib/registration-requests'
 import { cn } from '@/lib/utils'
 
-type Mode = 'login' | 'register' | 'forgot'
+type Mode = 'login' | 'register' | 'forgot' | 'request'
 
 export function AuthScreen() {
   const { login, register, loginAsGuest, lang, t, tl } = useStore()
@@ -17,6 +18,8 @@ export function AuthScreen() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
+  const [reqCategory, setReqCategory] = useState('')
+  const [reqBranch, setReqBranch] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -72,6 +75,31 @@ export function AuthScreen() {
         setPassword('')
         setPassword2('')
         setTimeout(() => switchMode('login'), 1500)
+      } else if (mode === 'request') {
+        const res = await submitRegistrationRequest({
+          fullName,
+          phone,
+          category: reqCategory || null,
+          branch: reqBranch || null,
+        })
+        if (!res.ok) {
+          setError(
+            res.error === 'exists'
+              ? tl({ ru: 'Заявка с этим номером уже отправлена', kk: 'Бұл нөмірмен өтініш жіберілген' })
+              : tl({ ru: 'Не удалось отправить заявку. Попробуйте ещё раз.', kk: 'Өтініш жіберілмеді. Қайталап көріңіз.' }),
+          )
+          return
+        }
+        setSuccess(
+          tl({
+            ru: 'Ваша заявка отправлена! Администратор проверит данные и активирует ваш доступ. Вы также можете связаться с нами напрямую: 87083425171',
+            kk: 'Өтінішіңіз жіберілді! Әкімші деректерді тексеріп, қолжетімділікті іске қосады. Тікелей хабарласуға болады: 87083425171',
+          }),
+        )
+        setFullName('')
+        setPhone('')
+        setReqCategory('')
+        setReqBranch('')
       } else {
         const res = await login(phone, password)
         if (!res.ok) setError(errorText(res.error === 'password' ? 'wrong' : res.error))
@@ -102,6 +130,7 @@ export function AuthScreen() {
               {mode === 'login' && tl({ ru: 'Вход для студентов', kk: 'Студенттерге кіру' })}
               {mode === 'register' && tl({ ru: 'Регистрация', kk: 'Тіркелу' })}
               {mode === 'forgot' && tl({ ru: 'Восстановление пароля', kk: 'Құпия сөзді қалпына келтіру' })}
+              {mode === 'request' && tl({ ru: 'Заявка на регистрацию', kk: 'Тіркелу өтініші' })}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {mode === 'login' &&
@@ -112,6 +141,11 @@ export function AuthScreen() {
                 tl({
                   ru: 'Введите номер телефона и новый пароль — пароль сменится сразу',
                   kk: 'Телефон нөмірі мен жаңа құпия сөзді енгізіңіз — құпия сөз бірден өзгереді',
+                })}
+              {mode === 'request' &&
+                tl({
+                  ru: 'Заполните данные — администратор проверит и активирует доступ',
+                  kk: 'Деректерді толтырыңыз — әкімші тексеріп, қолжетімділікті іске қосады',
                 })}
             </p>
           </div>
@@ -133,7 +167,7 @@ export function AuthScreen() {
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-3">
-            {mode === 'register' && (
+            {(mode === 'register' || mode === 'request') && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-muted-foreground">
                   {tl({ ru: 'Имя и Фамилия', kk: 'Аты-жөні' })}
@@ -162,6 +196,37 @@ export function AuthScreen() {
                 className="h-11 rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
               />
             </label>
+            {mode === 'request' && (
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {tl({ ru: 'Категория (необязательно)', kk: 'Санат (міндетті емес)' })}
+                  </span>
+                  <select
+                    value={reqCategory}
+                    onChange={(e) => setReqCategory(e.target.value)}
+                    className="h-11 rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
+                  >
+                    <option value="">{tl({ ru: 'Не выбрано', kk: 'Таңдалмаған' })}</option>
+                    <option value="B">B</option>
+                    <option value="B1">B1</option>
+                    <option value="C">C</option>
+                    <option value="C1">C1</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {tl({ ru: 'Филиал (необязательно)', kk: 'Филиал (міндетті емес)' })}
+                  </span>
+                  <input
+                    value={reqBranch}
+                    onChange={(e) => setReqBranch(e.target.value)}
+                    placeholder={tl({ ru: 'Туркестан / Карнак', kk: 'Түркістан / Қарнақ' })}
+                    className="h-11 rounded-xl border bg-card px-3 text-sm outline-none ring-primary focus:ring-2"
+                  />
+                </label>
+              </>
+            )}
             {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-muted-foreground">
@@ -246,7 +311,25 @@ export function AuthScreen() {
                   {tl({ ru: 'Сохранить новый пароль', kk: 'Жаңа құпия сөзді сақтау' })}
                 </>
               )}
+              {mode === 'request' && (
+                <>
+                  <UserPlus className="size-4" aria-hidden="true" />
+                  {tl({ ru: 'Отправить заявку', kk: 'Өтініш жіберу' })}
+                </>
+              )}
             </Button>
+            {mode === 'login' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full border-primary/40 text-primary hover:bg-primary/10"
+                onClick={() => switchMode('request')}
+              >
+                <UserPlus className="size-4" aria-hidden="true" />
+                {tl({ ru: 'Подать заявку на регистрацию', kk: 'Тіркелуге өтініш беру' })}
+              </Button>
+            )}
             {mode === 'login' && (
               <Button
                 type="button"
@@ -288,6 +371,14 @@ export function AuthScreen() {
             {mode === 'forgot' && (
               <>
                 {tl({ ru: 'Вспомнили пароль?', kk: 'Құпия сөз еске түсті ме?' })}{' '}
+                <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => switchMode('login')}>
+                  {tl({ ru: 'Войти', kk: 'Кіру' })}
+                </button>
+              </>
+            )}
+            {mode === 'request' && (
+              <>
+                {tl({ ru: 'Уже есть аккаунт?', kk: 'Аккаунт бар ма?' })}{' '}
                 <button type="button" className="font-semibold text-primary underline-offset-2 hover:underline" onClick={() => switchMode('login')}>
                   {tl({ ru: 'Войти', kk: 'Кіру' })}
                 </button>

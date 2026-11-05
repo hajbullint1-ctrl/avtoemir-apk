@@ -217,6 +217,36 @@ export async function registerAccount(
   return { ok: true, session: createSession(account) }
 }
 
+/** Create an account without starting a session (used when admin approves a registration request). */
+export async function createAccountSilent(
+  fullName: string,
+  phone: string,
+  password: string,
+): Promise<{ ok: true; accountId: string } | { ok: false; error: string }> {
+  const name = fullName.trim()
+  const ph = normalizePhone(phone)
+  const pw = password.trim()
+  if (name.length < 2) return { ok: false, error: 'name' }
+  if (ph.length < 10) return { ok: false, error: 'phone' }
+  if (pw.length < 6) return { ok: false, error: 'password' }
+
+  const accounts = loadAccounts()
+  if (accounts.some((a) => a.phone === ph)) return { ok: false, error: 'exists' }
+
+  const id = uid()
+  const passwordHash = await hashPasswordAsync(pw, id)
+  const account: Account = {
+    id,
+    fullName: name,
+    phone: ph,
+    passwordHash,
+    createdAt: new Date().toISOString(),
+  }
+  accounts.push(account)
+  saveAccounts(accounts)
+  return { ok: true, accountId: id }
+}
+
 export async function loginAccount(
   phone: string,
   password: string,

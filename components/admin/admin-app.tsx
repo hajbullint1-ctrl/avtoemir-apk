@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, Lock, Map, MessageSquare, MessageSquareText, Smartphone, Users, Signpost, Wrench } from 'lucide-react'
+import { ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, ClipboardList, Lock, Map, MessageSquare, MessageSquareText, Smartphone, Users, Signpost, Wrench } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
 import { AdminNotifications } from './admin-notifications'
@@ -12,6 +12,7 @@ import { AdminBookings } from './admin-bookings'
 import { AdminRoutes } from './admin-routes'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor, RoadSignsEditor } from './admin-content'
 import { AdminTestResults } from './admin-test-results'
+import { AdminRegistrationRequests } from './admin-registration-requests'
 import { useStore } from '@/lib/store'
 import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
 import type { L } from '@/lib/i18n'
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 
 const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JSX.Element }[] = [
   { id: 'students', label: { ru: 'Студенты и документы', kk: 'Студенттер мен құжаттар' }, icon: Users, Comp: AdminStudents },
+  { id: 'reg-requests', label: { ru: 'Заявки на регистрацию', kk: 'Тіркелу өтініштері' }, icon: ClipboardList, Comp: AdminRegistrationRequests },
   { id: 'bookings', label: { ru: 'Записи на вождение', kk: 'Жүргізу жазбалары' }, icon: CalendarCheck, Comp: AdminBookings },
   { id: 'messages', label: { ru: 'Сообщения', kk: 'Хабарламалар' }, icon: MessageSquare, Comp: AdminMessages },
   { id: 'instructors-chat', label: { ru: 'Чат инструкторов', kk: 'Нұсқаушылар чаты' }, icon: Car, Comp: AdminInstructorChat },
