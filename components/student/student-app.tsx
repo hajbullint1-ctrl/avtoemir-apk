@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { BookOpen, Car, ClipboardCheck, House, Info, LogOut, MessagesSquare } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
+import { ThemeToggle } from '@/components/shared/theme-toggle'
 import { TabHome } from './tab-home'
 import { TabTheory } from './tab-theory'
 import { TabTests } from './tab-tests'
@@ -82,6 +83,7 @@ export function StudentApp() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <LangToggle />
             <button type="button" onClick={logout} aria-label={tl({ ru: 'Выйти', kk: 'Шығу' })}
               title={tl({ ru: 'Выйти', kk: 'Шығу' })}
