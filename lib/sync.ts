@@ -489,10 +489,35 @@ async function saveInstructorsSafe(local: Instructor[]): Promise<void> {
   await saveSharedKey('instructors', normalizeInstructors(result))
 }
 
+
+/**
+ * Save a content list without letting a stale client resurrect deleted items.
+ * If local is longer than cloud, cloud is the authority (stale local).
+ * If local is shorter or equal, local wins (admin deletion/update).
+ */
+async function saveContentListSafe<T extends { id: string }>(key: SharedKey, local: T[]): Promise<void> {
+  const cloud = await loadSharedKeys([key])
+  const remote = (cloud?.[key as keyof SharedSlice] as T[] | undefined) || []
+  if (!remote.length) {
+    await saveSharedKey(key, local)
+    return
+  }
+  if (local.length <= remote.length) {
+    await saveSharedKey(key, local)
+    return
+  }
+  const localMap = new Map(local.map((i) => [i.id, i]))
+  const result = remote.map((r) => {
+    const l = localMap.get(r.id)
+    return l ? { ...r, ...l } : r
+  })
+  await saveSharedKey(key, result)
+}
+
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
   'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
-  'maintenanceMode', 'instructors',
+  'maintenanceMode', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
@@ -505,11 +530,11 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   const tasks: Promise<unknown>[] = []
   if (slice.school) tasks.push(saveSchoolMerged(slice.school))
   if (slice.instructors) tasks.push(saveInstructorsSafe(slice.instructors))
-  if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
+  if (slice.notices) tasks.push(saveContentListSafe('notices', slice.notices))
   if (slice.students) tasks.push(saveStudentsLocalWins(slice.students))
-  if (slice.theory) tasks.push(saveMergedById('theory', slice.theory))
-  if (slice.questions) tasks.push(saveMergedById('questions', slice.questions))
-  if (slice.reviews) tasks.push(saveSharedKey('reviews', slice.reviews))
+  if (slice.theory) tasks.push(saveContentListSafe('theory', slice.theory))
+  if (slice.questions) tasks.push(saveContentListSafe('questions', slice.questions))
+  if (slice.reviews) tasks.push(saveContentListSafe('reviews', slice.reviews))
   if (slice.messages) tasks.push(saveSharedKey('messages', slice.messages))
   if (slice.bookings) tasks.push(saveSharedKey('bookings', slice.bookings))
   if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
@@ -527,7 +552,7 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
       await saveSharedKey('theoryProgress', mergeProgressMaps(cloud?.theoryProgress || {}, slice.theoryProgress || {}))
     })())
   }
-  if (slice.roadSigns) tasks.push(saveMergedById('roadSigns', slice.roadSigns))
+  if (slice.roadSigns) tasks.push(saveContentListSafe('roadSigns', slice.roadSigns))
   if (slice.presence) tasks.push(saveSharedKey('presence', slice.presence))
   if (slice.droppedMessageIds) tasks.push(saveSharedKey('droppedMessageIds', slice.droppedMessageIds))
   if (slice.studentMistakes) {
