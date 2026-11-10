@@ -465,9 +465,34 @@ export async function saveMergedById<T extends { id: string }>(key: SharedKey, l
   return merged
 }
 
+/**
+ * Save instructors without letting a stale client resurrect a deleted one.
+ * If local list is longer than cloud, cloud wins (stale local).
+ * If local is shorter or equal, local wins (admin deletion or update).
+ */
+async function saveInstructorsSafe(local: Instructor[]): Promise<void> {
+  const cloud = await loadSharedKeys(['instructors'])
+  const remote = (cloud?.instructors || []) as Instructor[]
+  if (!remote.length) {
+    await saveSharedKey('instructors', normalizeInstructors(local))
+    return
+  }
+  if (local.length <= remote.length) {
+    await saveSharedKey('instructors', normalizeInstructors(local))
+    return
+  }
+  const localMap = new Map(local.map((i) => [i.id, i]))
+  const result = remote.map((r) => {
+    const l = localMap.get(r.id)
+    return l ? { ...r, ...l } : r
+  })
+  await saveSharedKey('instructors', normalizeInstructors(result))
+}
+
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
-  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds', 'maintenanceMode',
+  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
+  'maintenanceMode', 'instructors',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
@@ -479,7 +504,7 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (!isSupabaseConfigured) return
   const tasks: Promise<unknown>[] = []
   if (slice.school) tasks.push(saveSchoolMerged(slice.school))
-  if (slice.instructors) tasks.push(saveSharedKey('instructors', slice.instructors))
+  if (slice.instructors) tasks.push(saveInstructorsSafe(slice.instructors))
   if (slice.notices) tasks.push(saveSharedKey('notices', slice.notices))
   if (slice.students) tasks.push(saveStudentsLocalWins(slice.students))
   if (slice.theory) tasks.push(saveMergedById('theory', slice.theory))
