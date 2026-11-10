@@ -238,6 +238,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
       if (Array.isArray(cloud.instructors)) setInstructors(cloud.instructors)
+      if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory((prev) => ensureTheoryContent(cloud.theory!))
+      if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
+      if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
+      if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
     }
     const id = setInterval(pull, 15000)
     return () => clearInterval(id)
