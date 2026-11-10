@@ -237,6 +237,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setResults(cloud.results)
       }
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
+      if (Array.isArray(cloud.instructors)) setInstructors(cloud.instructors)
     }
     const id = setInterval(pull, 15000)
     return () => clearInterval(id)
