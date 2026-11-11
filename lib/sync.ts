@@ -32,14 +32,23 @@ export type SharedSlice = {
   studentMistakes?: Record<string, string[]>
   deletedStudentIds?: string[]
   deletedAccountIds?: string[]
+  /** Full snapshots for restore in admin */
+  deletedRecords?: DeletedRecord[]
   maintenanceMode?: boolean
+}
+
+export type DeletedRecord = {
+  id: string
+  deletedAt: string
+  student: Student | null
+  account: Account | null
 }
 
 const KEYS = [
   'school', 'instructors', 'notices', 'students', 'theory', 'questions', 'reviews',
   'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
   'theoryProgress', 'roadSigns', 'presence', 'droppedMessageIds', 'studentMistakes',
-  'deletedStudentIds', 'deletedAccountIds', 'maintenanceMode',
+  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode',
 ] as const
 
 export type SharedKey = (typeof KEYS)[number]
@@ -275,6 +284,13 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
     case 'deletedAccountIds':
       if (Array.isArray(d)) out.deletedAccountIds = d.filter((id) => typeof id === 'string') as string[]
       break
+    case 'deletedRecords':
+      if (Array.isArray(d)) {
+        out.deletedRecords = d
+          .filter((x) => x && typeof x === 'object' && typeof (x as DeletedRecord).id === 'string')
+          .map((x) => x as DeletedRecord)
+      }
+      break
     case 'maintenanceMode':
       out.maintenanceMode = d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true)
       break
@@ -465,11 +481,6 @@ export async function saveMergedById<T extends { id: string }>(key: SharedKey, l
   return merged
 }
 
-/**
- * Save instructors without letting a stale client resurrect a deleted one.
- * If local list is longer than cloud, cloud wins (stale local).
- * If local is shorter or equal, local wins (admin deletion or update).
- */
 async function saveInstructorsSafe(local: Instructor[]): Promise<void> {
   const cloud = await loadSharedKeys(['instructors'])
   const remote = (cloud?.instructors || []) as Instructor[]
@@ -489,12 +500,6 @@ async function saveInstructorsSafe(local: Instructor[]): Promise<void> {
   await saveSharedKey('instructors', normalizeInstructors(result))
 }
 
-
-/**
- * Save a content list without letting a stale client resurrect deleted items.
- * If local is longer than cloud, cloud is the authority (stale local).
- * If local is shorter or equal, local wins (admin deletion/update).
- */
 async function saveContentListSafe<T extends { id: string }>(key: SharedKey, local: T[]): Promise<void> {
   const cloud = await loadSharedKeys([key])
   const remote = (cloud?.[key as keyof SharedSlice] as T[] | undefined) || []
@@ -516,7 +521,7 @@ async function saveContentListSafe<T extends { id: string }>(key: SharedKey, loc
 
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
-  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
+  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds', 'deletedRecords',
   'maintenanceMode', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns',
 ]
 
