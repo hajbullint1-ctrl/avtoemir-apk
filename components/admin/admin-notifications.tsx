@@ -18,7 +18,7 @@ export function AdminNotifications() {
   const [bodyKk, setBodyKk] = useState('')
   const [sent, setSent] = useState(false)
 
-  const sentList = notices.filter((n) => n.kind === 'announce' || n.kind === 'info')
+  const sentList = [...notices].sort((a, b) => (b.time || '').localeCompare(a.time || ''))
 
   const onSend = (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,7 +127,7 @@ export function AdminNotifications() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold">{tl(n.title)}</p>
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {n.time}
+                    {(n as any).time || (n as any).date || ''}
                     <Button
                       type="button"
                       variant="ghost"
