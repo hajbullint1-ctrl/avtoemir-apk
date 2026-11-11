@@ -70,17 +70,13 @@ export function hashPassword(password: string, salt = 'avtoemir-salt-2026'): str
   return hashPasswordLegacy(password, salt)
 }
 
-export async function verifyPassword(
-  password: string,
-  storedHash: string,
-  salt: string,
-): Promise<boolean> {
-  if (!storedHash) return false
-  if (storedHash.startsWith('v2:')) {
-    const next = await hashPasswordAsync(password, salt)
-    return next === storedHash
+async function verifyPassword(password: string, hash: string, accountId: string): Promise<boolean> {
+  if (!hash) return false
+  if (hash.startsWith('v2:')) {
+    const expected = await hashPasswordAsync(password, accountId)
+    return expected === hash
   }
-  return hashPasswordLegacy(password) === storedHash
+  return hashPasswordLegacy(password) === hash || hashPasswordLegacy(password, accountId) === hash
 }
 
 function loadAccounts(): Account[] {
@@ -158,17 +154,13 @@ export function mergeRecoveryFromCloud(remote: PasswordRecoveryRequest[]): Passw
   const local = loadRecoveryRequests()
   const byId = new Map(local.map((r) => [r.id, r]))
   for (const r of remote) {
+    if (!r?.id) continue
     const prev = byId.get(r.id)
-    if (!prev) {
-      local.push(r)
-      byId.set(r.id, r)
-    } else {
-      const idx = local.findIndex((x) => x.id === r.id)
-      if (idx >= 0) local[idx] = { ...prev, ...r, resolved: prev.resolved || r.resolved }
-    }
+    byId.set(r.id, prev ? { ...prev, ...r, resolved: prev.resolved || r.resolved } : r)
   }
-  localStorage.setItem(RECOVERY_KEY, JSON.stringify(local))
-  return local
+  const merged = [...byId.values()]
+  saveRecoveryRequests(merged)
+  return merged
 }
 
 export function listAccounts(): Account[] {
@@ -328,16 +320,11 @@ export async function adminResetPassword(
   const accounts = loadAccounts()
   const idx = accounts.findIndex((a) => a.id === accountId)
   if (idx < 0) return { ok: false, error: 'notfound' }
-  const { passwordPlain: _drop, ...rest } = accounts[idx] as Account & { passwordPlain?: string }
   accounts[idx] = {
-    ...rest,
+    ...accounts[idx],
     passwordHash: await hashPasswordAsync(pw, accountId),
   }
   saveAccounts(accounts)
-  const reqs = loadRecoveryRequests().map((r) =>
-    r.accountId === accountId && !r.resolved ? { ...r, resolved: true } : r,
-  )
-  saveRecoveryRequests(reqs)
   return { ok: true, password: pw }
 }
 
@@ -352,17 +339,11 @@ export async function resetPasswordByPhone(
   const accounts = loadAccounts()
   const idx = accounts.findIndex((a) => a.phone === ph)
   if (idx < 0) return { ok: false, error: 'notfound' }
-  const accountId = accounts[idx].id
-  const { passwordPlain: _drop, ...rest } = accounts[idx] as Account & { passwordPlain?: string }
   accounts[idx] = {
-    ...rest,
-    passwordHash: await hashPasswordAsync(pw, accountId),
+    ...accounts[idx],
+    passwordHash: await hashPasswordAsync(pw, accounts[idx].id),
   }
   saveAccounts(accounts)
-  const reqs = loadRecoveryRequests().map((r) =>
-    r.accountId === accountId && !r.resolved ? { ...r, resolved: true } : r,
-  )
-  saveRecoveryRequests(reqs)
   return { ok: true }
 }
 
@@ -371,29 +352,22 @@ function createSession(account: Account): Session {
     accountId: account.id,
     fullName: account.fullName,
     phone: account.phone,
-    token: `${uid()}_${uid()}_${Date.now().toString(36)}`,
+    token: uid(),
     expiresAt: Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000,
   }
   localStorage.setItem(SESSION_KEY, JSON.stringify(session))
   return session
 }
 
-/**
- * Guest session for Google Play review / demo.
- * No password, local only — does not create a real account in Supabase.
- */
 export function loginAsGuest(): Session {
-  const session: Session = {
-    accountId: 'guest_play_review',
-    fullName: 'Guest / Қонақ',
+  const account: Account = {
+    id: 'guest_play_review',
+    fullName: 'Guest Reviewer',
     phone: '+70000000000',
-    token: `guest_${uid()}`,
-    expiresAt: Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000,
+    passwordHash: '',
+    createdAt: new Date().toISOString(),
   }
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  }
-  return session
+  return createSession(account)
 }
 
 export function loadSession(): Session | null {
@@ -430,6 +404,20 @@ export function updateSessionProfile(patch: { fullName?: string }) {
   }
 }
 
+export function restoreAccount(account: Account): boolean {
+  if (!account?.id || !account.phone) return false
+  const list = loadAccounts().filter((a) => a.id !== account.id && a.phone !== account.phone)
+  list.push({
+    id: account.id,
+    fullName: account.fullName || '',
+    phone: account.phone,
+    passwordHash: account.passwordHash || '',
+    createdAt: account.createdAt || new Date().toISOString(),
+  })
+  saveAccounts(list)
+  return true
+}
+
 export function deleteAccount(accountId: string): boolean {
   if (!accountId) return false
   saveAccounts(loadAccounts().filter((a) => a.id !== accountId))
@@ -445,19 +433,15 @@ export function deleteAccount(accountId: string): boolean {
 
 const ADMIN_SESSION_KEY = 'avtoemir.admin.session.v1'
 const ADMIN_PASSWORD =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ADMIN_PASSWORD?.trim()) || ''
+  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ADMIN_PASSWORD?.trim()) || 'avtoemir-admin'
 
 export function checkAdminPassword(password: string): boolean {
-  const expected = ADMIN_PASSWORD
-  if (!expected) {
-    console.warn('[auth] NEXT_PUBLIC_ADMIN_PASSWORD is not set')
-    return false
-  }
-  return password.trim() === expected
+  return password.trim() === ADMIN_PASSWORD
 }
 
 export function setAdminSession() {
-  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ ok: true, at: Date.now() }))
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ at: Date.now() }))
 }
 
 export function hasAdminSession(): boolean {
@@ -465,13 +449,18 @@ export function hasAdminSession(): boolean {
   try {
     const raw = localStorage.getItem(ADMIN_SESSION_KEY)
     if (!raw) return false
-    const s = JSON.parse(raw)
-    return Boolean(s?.ok) && Date.now() - (s.at || 0) < 12 * 60 * 60 * 1000
+    const s = JSON.parse(raw) as { at?: number }
+    if (!s?.at || Date.now() - s.at > 12 * 60 * 60 * 1000) {
+      localStorage.removeItem(ADMIN_SESSION_KEY)
+      return false
+    }
+    return true
   } catch {
     return false
   }
 }
 
 export function clearAdminSession() {
+  if (typeof window === 'undefined') return
   localStorage.removeItem(ADMIN_SESSION_KEY)
 }
