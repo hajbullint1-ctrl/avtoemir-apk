@@ -206,13 +206,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ready || !isSupabaseConfigured) return
     const t = setTimeout(() => {
       void saveSharedToCloud({
-        school, instructors, notices, students, theory, questions, reviews,
+        school, instructors, students, theory, questions, reviews,
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress, roadSigns,
       })
     }, 1200)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, school, instructors, students, theory, questions, reviews, learnedSigns, profiles, theoryProgress, roadSigns])
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
@@ -238,7 +238,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud.students?.length || cloud.deletedStudentIds?.length) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
-      if (cloud.notices) setNotices(cloud.notices)
+      if (cloud.notices) setNotices((prev) => mergeById(prev, cloud.notices!))
       if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
       if (cloud.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
@@ -821,7 +821,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
     },
-    cancelBooking: (id) => {
+    cancelBooking: (id, opts) => {
+      const booking = bookings.find((b) => b.id === id)
       setBookings((list) => {
         const next = list.filter((b) => b.id !== id)
         void saveBookingsMerged(next, [id]).then((merged) => {
@@ -829,6 +830,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         return next
       })
+      if (opts?.notifyStudent && booking?.studentId) {
+        const n: Notice = {
+          id: uid(),
+          kind: 'lesson',
+          title: { ru: 'Занятие отменено', kk: 'Сабақ болдырылмады' },
+          body: {
+            ru: `Запись на ${booking.date} в ${booking.time} отменена администратором.`,
+            kk: `${booking.date} күні ${booking.time} жазба әкімші тарапынан болдырылмады.`,
+          },
+          time: nowStamp(),
+          read: false,
+          studentId: booking.studentId,
+        }
+        setNotices((list) => {
+          const next = [n, ...list]
+          void saveNoticesMerged(next)
+          return next
+        })
+      }
     },
     results,
     addResult: (score, total) => {

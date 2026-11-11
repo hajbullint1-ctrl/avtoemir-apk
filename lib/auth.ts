@@ -1,3 +1,4 @@
+import { saveSharedKey } from './sync'
 /** Client-side student accounts + session (localStorage). */
 
 export type Account = {
@@ -325,6 +326,7 @@ export async function adminResetPassword(
     passwordHash: await hashPasswordAsync(pw, accountId),
   }
   saveAccounts(accounts)
+  void saveSharedKey('accounts', accounts)
   return { ok: true, password: pw }
 }
 
@@ -344,6 +346,7 @@ export async function resetPasswordByPhone(
     passwordHash: await hashPasswordAsync(pw, accounts[idx].id),
   }
   saveAccounts(accounts)
+  void saveSharedKey('accounts', accounts)
   return { ok: true }
 }
 
