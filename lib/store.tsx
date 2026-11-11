@@ -537,8 +537,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       setMessages((list) => {
+        const removed = list.filter((m) => m.studentId === id).map((m) => m.id)
         const next = list.filter((m) => m.studentId !== id)
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next, removed)
         return next
       })
       setTheoryProgress((prev) => {
@@ -601,8 +602,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       setMessages((list) => {
+        const removed = list.filter((m) => m.studentId && ids.includes(m.studentId)).map((m) => m.id)
         const next = list.filter((m) => !m.studentId || !ids.includes(m.studentId))
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next, removed)
         return next
       })
       void (async () => {
