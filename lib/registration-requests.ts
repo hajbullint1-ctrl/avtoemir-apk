@@ -11,7 +11,7 @@ import {
   normalizePhone,
   type Account,
 } from './auth'
-import { saveSharedKey } from './sync'
+import { saveSharedKey, loadSharedKeys } from './sync'
 import type { Student, Category } from './data'
 
 
@@ -27,35 +27,16 @@ function withTimeout<T>(promise: PromiseLike<T>, ms = 12000): Promise<T> {
 
 
 async function loadRegRequests(): Promise<RegistrationRequest[]> {
-  const sb = getSupabase()
-  if (!sb) return []
   try {
-    const { data, error } = await withTimeout(
-      sb.from('app_state').select('data').eq('key', 'registrationRequests').maybeSingle(),
-      8000,
-    )
-    if (error || !data?.data) return []
-    return Array.isArray(data.data) ? (data.data as RegistrationRequest[]) : []
+    const cloud = await loadSharedKeys(['registrationRequests'])
+    return Array.isArray(cloud?.registrationRequests) ? cloud.registrationRequests : []
   } catch {
     return []
   }
 }
 
 async function saveRegRequests(list: RegistrationRequest[]): Promise<boolean> {
-  const sb = getSupabase()
-  if (!sb) return false
-  try {
-    const { error } = await withTimeout(
-      sb.from('app_state').upsert(
-        { key: 'registrationRequests', data: list, updated_at: new Date().toISOString() },
-        { onConflict: 'key' },
-      ),
-      8000,
-    )
-    return !error
-  } catch {
-    return false
-  }
+  return saveSharedKey('registrationRequests', list)
 }
 
 export type RegistrationRequest = {

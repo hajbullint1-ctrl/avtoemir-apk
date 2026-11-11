@@ -34,6 +34,7 @@ export type SharedSlice = {
   deletedAccountIds?: string[]
   /** Full snapshots for restore in admin */
   deletedRecords?: DeletedRecord[]
+  registrationRequests?: import("./registration-requests").RegistrationRequest[]
   maintenanceMode?: boolean
 }
 
@@ -48,7 +49,7 @@ const KEYS = [
   'school', 'instructors', 'notices', 'students', 'theory', 'questions', 'reviews',
   'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
   'theoryProgress', 'roadSigns', 'presence', 'droppedMessageIds', 'studentMistakes',
-  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode',
+  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode', 'registrationRequests',
 ] as const
 
 export type SharedKey = (typeof KEYS)[number]
@@ -290,6 +291,9 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
           .filter((x) => x && typeof x === 'object' && typeof (x as DeletedRecord).id === 'string')
           .map((x) => x as DeletedRecord)
       }
+      break
+    case 'registrationRequests':
+      if (Array.isArray(d)) out.registrationRequests = d as import('./registration-requests').RegistrationRequest[]
       break
     case 'maintenanceMode':
       out.maintenanceMode = Boolean(d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true))
@@ -630,7 +634,7 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
   'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds', 'deletedRecords',
-  'maintenanceMode', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns',
+  'maintenanceMode', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'registrationRequests',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [

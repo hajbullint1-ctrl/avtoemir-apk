@@ -1,4 +1,4 @@
-import { saveSharedKey } from './sync'
+import { saveSharedKey, loadSharedKeys } from './sync'
 /** Client-side student accounts + session (localStorage). */
 
 export type Account = {
@@ -312,6 +312,21 @@ export function getAccountPassword(_accountId: string): string | null {
   return null
 }
 
+
+async function persistAccountsToCloud(accounts: Account[]) {
+  try {
+    const cloud = await loadSharedKeys(['accounts'])
+    const remote = (cloud?.accounts || []) as Account[]
+    const map = new Map<string, Account>()
+    for (const a of remote) if (a?.id) map.set(a.id, a)
+    for (const a of accounts) if (a?.id) map.set(a.id, a)
+    await saveSharedKey('accounts', [...map.values()])
+  } catch (e) {
+    console.warn('[auth] persist accounts:', e)
+    await saveSharedKey('accounts', accounts)
+  }
+}
+
 export async function adminResetPassword(
   accountId: string,
   newPassword: string,
@@ -326,7 +341,7 @@ export async function adminResetPassword(
     passwordHash: await hashPasswordAsync(pw, accountId),
   }
   saveAccounts(accounts)
-  void saveSharedKey('accounts', accounts)
+  void persistAccountsToCloud(accounts)
   return { ok: true, password: pw }
 }
 
@@ -346,7 +361,7 @@ export async function resetPasswordByPhone(
     passwordHash: await hashPasswordAsync(pw, accounts[idx].id),
   }
   saveAccounts(accounts)
-  void saveSharedKey('accounts', accounts)
+  void persistAccountsToCloud(accounts)
   return { ok: true }
 }
 
