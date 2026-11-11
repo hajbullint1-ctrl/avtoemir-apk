@@ -18,7 +18,8 @@ import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
   mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
-  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, type DeletedRecord,
+  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState,
+  type DeletedRecord,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
 import { syncCertificateWidget } from './certificate-widget'
@@ -59,7 +60,6 @@ type Store = {
   archiveStudent: (id: string) => void
   unarchiveStudent: (id: string) => void
   deleteStudent: (id: string) => void
-  /** Permanently remove all approved students + accounts (cleanup) */
   purgeApprovedStudents: () => number
   deletedRecords: DeletedRecord[]
   restoreDeletedAccount: (id: string) => boolean
@@ -209,10 +209,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         school, instructors, notices, students, theory, questions, reviews,
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress, roadSigns,
+        deletedRecords,
       })
     }, 1200)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, learnedSigns, profiles, theoryProgress, roadSigns, deletedRecords])
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
@@ -263,7 +264,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
     }
     const id = setInterval(pull, 15000)
-    return () => clearInterval(id)
+
+    const unsub = subscribeAppState(LIVE_KEYS, () => {
+      void pull()
+    })
+
+    return () => {
+      clearInterval(id)
+      unsub()
+    }
   }, [ready])
 
   const me = useMemo(() => {
@@ -295,7 +304,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [ready, session, me.id, me.name, me.readyDate, me.status, school.name])
 
-  // Kick student to login if their account was deleted from admin
   useEffect(() => {
     if (!ready || !session?.accountId) return
     const id = session.accountId
@@ -309,7 +317,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     if (!isSupabaseConfigured) return
-    void loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts']).then((cloud) => {
+    void loadSharedKeys(['deletedAccountIds', 'deletedStudentIds']).then((cloud) => {
       if (!cloud) return
       const delA = new Set(cloud.deletedAccountIds || [])
       const delS = new Set(cloud.deletedStudentIds || [])
@@ -429,6 +437,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteMyAccount: () => {
       const id = session?.accountId
       if (!id) return { ok: false as const, error: 'session' }
+      const snapStudent = students.find((s) => s.id === id) || null
+      const snapAccount = findAccountById(id)
       deleteAccount(id)
       setStudents((list) => {
         const next = list.filter((s) => s.id !== id && s.id !== 'me')
@@ -436,13 +446,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
-      void (async () => {
-        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
-        const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
-        const delS = [...new Set([...(cloud?.deletedStudentIds || []), id])]
-        await saveSharedKey('deletedAccountIds', delA)
-        await saveSharedKey('deletedStudentIds', delS)
-      })()
+      void saveDeletedBundle({
+        addIds: [id],
+        addRecords: [{
+          id,
+          deletedAt: new Date().toISOString(),
+          student: snapStudent,
+          account: snapAccount,
+        }],
+      }).then((bundle) => {
+        if (bundle.ok) setDeletedRecords(bundle.records)
+      })
       clearSession()
       setSession(null)
       return { ok: true as const }
@@ -546,18 +560,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const accountsNext = listAccounts().filter((a) => a.id !== id)
       void saveSharedKey('accounts', accountsNext)
       void (async () => {
-        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts', 'students', 'deletedRecords'])
-        const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
-        const delS = [...new Set([...(cloud?.deletedStudentIds || []), id])]
-        await saveSharedKey('deletedAccountIds', delA)
-        await saveSharedKey('deletedStudentIds', delS)
+        const cloud = await loadSharedKeys(['accounts', 'students'])
         const cloudAccounts = (cloud?.accounts || accountsNext).filter((a: { id?: string }) => a?.id && a.id !== id)
         const cloudStudents = (cloud?.students || []).filter((s: { id?: string }) => s?.id && s.id !== id && s.id !== 'me')
-        await saveSharedKey('accounts', cloudAccounts)
-        await saveSharedKey('students', cloudStudents)
-        const recs = [record, ...((cloud?.deletedRecords || []).filter((r) => r.id !== id))].slice(0, 200)
-        await saveSharedKey('deletedRecords', recs)
-        setDeletedRecords(recs)
+        await Promise.all([
+          saveSharedKey('accounts', cloudAccounts),
+          saveSharedKey('students', cloudStudents),
+        ])
+        const bundle = await saveDeletedBundle({ addIds: [id], addRecords: [record] })
+        if (bundle.ok) setDeletedRecords(bundle.records)
+        else console.warn('[store] saveDeletedBundle failed for', id)
       })()
     },
     purgeApprovedStudents: () => {
@@ -615,21 +627,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const accountsNext = listAccounts().filter((a) => !ids.includes(a.id))
       void saveSharedKey('accounts', accountsNext)
       void (async () => {
-        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts', 'students', 'deletedRecords'])
-        const delA = [...new Set([...(cloud?.deletedAccountIds || []), ...ids])]
-        const delS = [...new Set([...(cloud?.deletedStudentIds || []), ...ids])]
-        await saveSharedKey('deletedAccountIds', delA)
-        await saveSharedKey('deletedStudentIds', delS)
+        const cloud = await loadSharedKeys(['accounts', 'students'])
         const cloudAccounts = (cloud?.accounts || accountsNext).filter((a: { id?: string }) => a?.id && !ids.includes(a.id))
         const cloudStudents = (cloud?.students || []).filter((s: { id?: string }) => s?.id && !ids.includes(s.id) && s.id !== 'me')
-        await saveSharedKey('accounts', cloudAccounts)
-        await saveSharedKey('students', cloudStudents)
-        const map = new Map<string, DeletedRecord>()
-        for (const r of snaps) map.set(r.id, r)
-        for (const r of cloud?.deletedRecords || []) if (!map.has(r.id)) map.set(r.id, r)
-        const recs = [...map.values()].slice(0, 200)
-        await saveSharedKey('deletedRecords', recs)
-        setDeletedRecords(recs)
+        await Promise.all([
+          saveSharedKey('accounts', cloudAccounts),
+          saveSharedKey('students', cloudStudents),
+        ])
+        const bundle = await saveDeletedBundle({ addIds: ids, addRecords: snaps })
+        if (bundle.ok) setDeletedRecords(bundle.records)
+        else console.warn('[store] saveDeletedBundle purge failed')
       })()
       return ids.length
     },
@@ -665,33 +672,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       void (async () => {
-        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts', 'students', 'deletedRecords'])
-        const delA = (cloud?.deletedAccountIds || []).filter((x) => x !== id)
-        const delS = (cloud?.deletedStudentIds || []).filter((x) => x !== id)
-        await saveSharedKey('deletedAccountIds', delA)
-        await saveSharedKey('deletedStudentIds', delS)
+        const cloud = await loadSharedKeys(['accounts', 'students'])
         const accountsNext = listAccounts()
-        await saveSharedKey('accounts', accountsNext)
         const studentsNext = (cloud?.students || []).filter((s) => s.id !== id)
         if (rec.student) studentsNext.push({ ...rec.student, archived: false, archivedAt: null })
-        await saveSharedKey('students', studentsNext)
-        const recs = (cloud?.deletedRecords || []).filter((r) => r.id !== id)
-        await saveSharedKey('deletedRecords', recs)
-        setDeletedRecords(recs)
+        await Promise.all([
+          saveSharedKey('accounts', accountsNext),
+          saveSharedKey('students', studentsNext),
+        ])
+        const bundle = await saveDeletedBundle({ removeIds: [id], removeRecordIds: [id] })
+        if (bundle.ok) setDeletedRecords(bundle.records)
+        else console.warn('[store] saveDeletedBundle restore failed for', id)
       })()
       return true
     },
     purgeDeletedRecord: (id) => {
       if (!id) return
-      setDeletedRecords((prev) => {
-        const next = prev.filter((r) => r.id !== id)
-        void saveSharedKey('deletedRecords', next)
-        return next
-      })
+      setDeletedRecords((prev) => prev.filter((r) => r.id !== id))
       void (async () => {
-        const cloud = await loadSharedKeys(['deletedRecords'])
-        const recs = (cloud?.deletedRecords || []).filter((r) => r.id !== id)
-        await saveSharedKey('deletedRecords', recs)
+        const bundle = await saveDeletedBundle({ removeRecordIds: [id] })
+        if (bundle.ok) setDeletedRecords(bundle.records)
       })()
     },
     deletedRecords,
