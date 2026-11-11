@@ -15,10 +15,10 @@ import { saveSharedKey } from './sync'
 import type { Student, Category } from './data'
 
 
-function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms = 12000): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout')), ms)
-    promise.then(
+    Promise.resolve(promise).then(
       (v) => { clearTimeout(t); resolve(v) },
       (e) => { clearTimeout(t); reject(e) },
     )
@@ -113,7 +113,7 @@ export async function submitRegistrationRequest(input: {
   // Always write to app_state (reliable)
   try {
     const prev = await loadRegRequests()
-    const next = [row, ...prev.filter((x) => x.id !== row.id && x.phone !== row.phone)]
+    const next = [{ ...row, reviewed_at: null, note: null }, ...prev.filter((x) => x.id !== row.id && x.phone !== row.phone)]
     const ok = await saveRegRequests(next)
     if (!ok) return { ok: false, error: 'save' }
   } catch (e) {

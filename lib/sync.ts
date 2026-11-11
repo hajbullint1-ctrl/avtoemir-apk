@@ -292,7 +292,7 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
       }
       break
     case 'maintenanceMode':
-      out.maintenanceMode = d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true)
+      out.maintenanceMode = Boolean(d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true))
       break
   }
 }
@@ -597,7 +597,7 @@ export async function forceSaveResults(list: TestResult[]): Promise<void> {
 
 export async function saveMergedById<T extends { id: string }>(key: SharedKey, local: T[]): Promise<T[]> {
   const cloud = await loadSharedKeys([key])
-  const remote = (cloud?.[key] || []) as T[]
+  const remote = ((cloud?.[key] || []) as unknown) as T[]
   const merged = mergeById(remote as any, local as any) as T[]
   await saveSharedKey(key, merged)
   return merged
@@ -613,7 +613,7 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
     return local
   }
   const cloud = await loadSharedKeys([key])
-  const remote = (cloud?.[key] || []) as T[]
+  const remote = ((cloud?.[key] || []) as unknown) as T[]
   if (local.length <= remote.length) {
     await saveSharedKey(key, local)
     return local
