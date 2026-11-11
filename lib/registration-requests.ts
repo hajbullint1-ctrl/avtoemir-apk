@@ -25,6 +25,39 @@ function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
   })
 }
 
+
+async function loadRegRequests(): Promise<RegistrationRequest[]> {
+  const sb = getSupabase()
+  if (!sb) return []
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('app_state').select('data').eq('key', 'registrationRequests').maybeSingle(),
+      8000,
+    )
+    if (error || !data?.data) return []
+    return Array.isArray(data.data) ? (data.data as RegistrationRequest[]) : []
+  } catch {
+    return []
+  }
+}
+
+async function saveRegRequests(list: RegistrationRequest[]): Promise<boolean> {
+  const sb = getSupabase()
+  if (!sb) return false
+  try {
+    const { error } = await withTimeout(
+      sb.from('app_state').upsert(
+        { key: 'registrationRequests', data: list, updated_at: new Date().toISOString() },
+        { onConflict: 'key' },
+      ),
+      8000,
+    )
+    return !error
+  } catch {
+    return false
+  }
+}
+
 export type RegistrationRequest = {
   id: string
   full_name: string
@@ -77,35 +110,41 @@ export async function submitRegistrationRequest(input: {
     created_at: new Date().toISOString(),
   }
 
+  // Always write to app_state (reliable)
   try {
-    const { error } = await withTimeout(sb.from('registration_requests').insert(row), 10000)
-    if (error) {
-      console.warn('[reg] submit:', error.message)
-      return { ok: false, error: 'save' }
-    }
+    const prev = await loadRegRequests()
+    const next = [row, ...prev.filter((x) => x.id !== row.id && x.phone !== row.phone)]
+    const ok = await saveRegRequests(next)
+    if (!ok) return { ok: false, error: 'save' }
   } catch (e) {
-    console.warn('[reg] submit timeout/exception:', e)
-    return { ok: false, error: 'timeout' }
+    console.warn('[reg] submit app_state:', e)
+    return { ok: false, error: 'save' }
+  }
+  // Best-effort also write to table
+  try {
+    await withTimeout(sb.from('registration_requests').insert(row), 6000)
+  } catch (e) {
+    console.warn('[reg] table insert skipped:', e)
   }
   return { ok: true }
 }
 
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
+  // Primary: app_state
+  const fromState = await loadRegRequests()
+  if (fromState.length) return fromState
+  // Fallback: dedicated table
   const sb = getSupabase()
-  if (!sb) return []
+  if (!sb) return fromState
   try {
     const { data, error } = await withTimeout(
       sb.from('registration_requests').select('*').order('created_at', { ascending: false }),
-      10000,
+      8000,
     )
-    if (error) {
-      console.warn('[reg] list:', error.message)
-      return []
-    }
+    if (error) return fromState
     return (data ?? []) as RegistrationRequest[]
-  } catch (e) {
-    console.warn('[reg] list timeout/exception:', e)
-    return []
+  } catch {
+    return fromState
   }
 }
 
@@ -114,19 +153,28 @@ export async function setRegistrationRequestStatus(
   status: 'approved' | 'rejected',
   note?: string,
 ): Promise<boolean> {
+  // Update app_state
+  try {
+    const prev = await loadRegRequests()
+    const next = prev.map((r) =>
+      r.id === id ? { ...r, status, reviewed_at: new Date().toISOString(), note: note ?? null } : r
+    )
+    await saveRegRequests(next)
+  } catch (e) {
+    console.warn('[reg] status app_state:', e)
+  }
+  // Best-effort table update
   const sb = getSupabase()
-  if (!sb) return false
-  const { error } = await sb
-    .from('registration_requests')
-    .update({
-      status,
-      reviewed_at: new Date().toISOString(),
-      note: note ?? null,
-    })
-    .eq('id', id)
-  if (error) {
-    console.warn('[reg] status:', error.message)
-    return false
+  if (sb) {
+    try {
+      await sb.from('registration_requests').update({
+        status,
+        reviewed_at: new Date().toISOString(),
+        note: note ?? null,
+      }).eq('id', id)
+    } catch (e) {
+      console.warn('[reg] status table:', e)
+    }
   }
   return true
 }

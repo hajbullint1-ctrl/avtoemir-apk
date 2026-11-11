@@ -32,10 +32,13 @@ export function AdminRegistrationRequests() {
   const load = async () => {
     setLoading(true)
     setLoadError(false)
-    const list = await listRegistrationRequests()
-    setItems(list)
-    // If still empty after a real attempt, surface a soft error (table/RLS/network)
-    if (list.length === 0) setLoadError(true)
+    try {
+      const list = await listRegistrationRequests()
+      setItems(list)
+    } catch (e) {
+      console.warn(e)
+      setLoadError(true)
+    }
     setLoading(false)
   }
 
