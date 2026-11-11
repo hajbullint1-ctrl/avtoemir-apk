@@ -376,17 +376,89 @@ function sanitizeStudentsForCloud(list: unknown): unknown {
 export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
   const sb = getSupabase()
   if (!sb) return false
-  try {
-    const payload = key === 'students' ? sanitizeStudentsForCloud(data) : data
-    const { error } = await sb.from('app_state').upsert(
-      { key, data: payload, updated_at: new Date().toISOString() },
-      { onConflict: 'key' },
+  const payload = key === 'students' ? sanitizeStudentsForCloud(data) : data
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { error } = await sb.from('app_state').upsert(
+        { key, data: payload, updated_at: new Date().toISOString() },
+        { onConflict: 'key' },
+      )
+      if (!error) return true
+      console.warn(`[sync] save ${key} attempt ${attempt + 1}:`, error.message)
+    } catch (e) {
+      console.warn(`[sync] save ${key} exception attempt ${attempt + 1}:`, e)
+    }
+    await new Promise((r) => setTimeout(r, 250 * (attempt + 1)))
+  }
+  return false
+}
+
+/** Merge tombstones + snapshots and write all three keys to Supabase together. */
+export async function saveDeletedBundle(opts: {
+  addIds?: string[]
+  removeIds?: string[]
+  addRecords?: DeletedRecord[]
+  removeRecordIds?: string[]
+  replaceRecords?: DeletedRecord[]
+}): Promise<{ ok: boolean; records: DeletedRecord[]; deletedIds: string[] }> {
+  const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'deletedRecords'])
+  const del = new Set<string>([...(cloud?.deletedAccountIds || []), ...(cloud?.deletedStudentIds || [])])
+  for (const id of opts.addIds || []) if (id) del.add(id)
+  for (const id of opts.removeIds || []) del.delete(id)
+
+  let records: DeletedRecord[]
+  if (opts.replaceRecords) {
+    records = opts.replaceRecords
+  } else {
+    const map = new Map<string, DeletedRecord>()
+    for (const r of cloud?.deletedRecords || []) {
+      if (r?.id) map.set(r.id, r)
+    }
+    for (const r of opts.addRecords || []) {
+      if (r?.id) map.set(r.id, r)
+    }
+    for (const id of opts.removeRecordIds || []) map.delete(id)
+    for (const id of opts.removeIds || []) map.delete(id)
+    records = [...map.values()]
+      .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''))
+      .slice(0, 200)
+  }
+
+  for (const r of records) if (r?.id) del.add(r.id)
+
+  const deletedIds = [...del]
+  const [a, b, c] = await Promise.all([
+    saveSharedKey('deletedAccountIds', deletedIds),
+    saveSharedKey('deletedStudentIds', deletedIds),
+    saveSharedKey('deletedRecords', records),
+  ])
+  return { ok: a && b && c, records, deletedIds }
+}
+
+/** Subscribe to app_state changes (Supabase Realtime). Returns unsubscribe. */
+export function subscribeAppState(
+  keys: SharedKey[],
+  onChange: (changedKey: string) => void,
+): () => void {
+  const sb = getSupabase()
+  if (!sb) return () => {}
+  const keySet = new Set<string>(keys)
+  const channel = sb
+    .channel(`app_state_${Date.now()}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_state' },
+      (payload) => {
+        const row = (payload.new || payload.old) as { key?: string } | null
+        const k = row?.key
+        if (k && keySet.has(k)) onChange(k)
+      },
     )
-    if (error) { console.warn(`[sync] save ${key}:`, error.message); return false }
-    return true
-  } catch (e) {
-    console.warn(`[sync] save ${key} exception:`, e)
-    return false
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') console.warn('[sync] realtime channel error')
+    })
+  return () => {
+    void sb.removeChannel(channel)
   }
 }
 
@@ -567,6 +639,9 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
     })())
   }
   if (slice.maintenanceMode !== undefined) tasks.push(saveSharedKey('maintenanceMode', slice.maintenanceMode))
+  if (slice.deletedRecords) tasks.push(saveSharedKey('deletedRecords', slice.deletedRecords))
+  if (slice.deletedAccountIds) tasks.push(saveSharedKey('deletedAccountIds', slice.deletedAccountIds))
+  if (slice.deletedStudentIds) tasks.push(saveSharedKey('deletedStudentIds', slice.deletedStudentIds))
   await Promise.all(tasks)
 }
 
