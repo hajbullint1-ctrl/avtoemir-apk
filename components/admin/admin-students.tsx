@@ -265,7 +265,7 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
 }
 
 export function AdminStudents() {
-  const { students, tl, presence, deleteStudent } = useStore()
+  const { students, tl, presence, deleteStudent, purgeApprovedStudents } = useStore()
   const [filter, setFilter] = useState<DocStatus | 'all' | 'archived'>('all')
   const [tick, setTick] = useState(0)
   const accounts = useMemo(() => listAccounts(), [tick, students])
@@ -273,13 +273,14 @@ export function AdminStudents() {
   const confirmDelete = (s: Student) => {
     const ok = window.confirm(
       tl({
-        ru: `Удалить аккаунт «${s.name}» навсегда? Вход по этому телефону и все документы будут удалены.`,
-        kk: `«${s.name}» аккаунтын біржола жою керек пе?`,
+        ru: `Удалить «${s.name}» навсегда? Аккаунт, документы и доступ по номеру ${s.phone} будут стёрты из базы — войти снова нельзя.`,
+        kk: `«${s.name}» біржола жою керек пе? Аккаунт, құжаттар және ${s.phone} нөмірімен кіру өшеді.`,
       }),
     )
     if (!ok) return
     deleteStudent(s.id)
     setTick((n) => n + 1)
+    if (selectedId === s.id) setSelectedId(null)
   }
 
   const isDemoEntry = (id?: string, phone?: string, name?: string) => {
@@ -340,9 +341,34 @@ export function AdminStudents() {
 
   const selected = list.find((x) => x.student.id === selectedId) ?? null
 
+  const approvedCount = useMemo(
+    () => students.filter((s) => s.status === 'approved' && s.id !== 'me' && !isDemoEntry(s.id, s.phone, s.name)).length,
+    [students],
+  )
+
+  const purgeApproved = () => {
+    if (!approvedCount) return
+    const ok = window.confirm(
+      tl({
+        ru: `Удалить всех подтверждённых учеников (${approvedCount})? Их аккаунты будут стёрты — войти снова по этим номерам будет нельзя.`,
+        kk: `Барлық расталған оқушыларды (${approvedCount}) жою керек пе? Аккаунттар өшеді — осы нөмірлермен қайта кіру мүмкін емес.`,
+      }),
+    )
+    if (!ok) return
+    const n = purgeApprovedStudents()
+    setTick((x) => x + 1)
+    setSelectedId(null)
+    window.alert(
+      tl({
+        ru: n ? `Удалено учеников: ${n}` : 'Некого удалять',
+        kk: n ? `Жойылған оқушылар: ${n}` : 'Жоятын ешкім жоқ',
+      }),
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(['all', 'pending', 'approved', 'rejected', 'draft', 'archived'] as const).map((f) => {
           const count =
             f === 'archived'
@@ -371,6 +397,16 @@ export function AdminStudents() {
             </button>
           )
         })}
+        {approvedCount > 0 && (
+          <button
+            type="button"
+            onClick={purgeApproved}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-destructive/40 px-3 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+            {tl({ ru: 'Очистить подтверждённых', kk: 'Расталғандарды тазалау' })} ({approvedCount})
+          </button>
+        )}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="overflow-hidden rounded-2xl border bg-card">
