@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, ClipboardList, Lock, Map, MessageSquare, MessageSquareText, Smartphone, Users, UserX, Signpost, Wrench } from 'lucide-react'
+import {
+  ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, ClipboardList,
+  Lock, Map, MessageSquare, MessageSquareText, Smartphone, Users, UserX, Signpost, Wrench,
+} from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
 import { AdminDeletedAccounts } from './admin-deleted'
@@ -53,37 +56,40 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
           <h1 className="text-lg font-extrabold">{tl({ ru: 'Панель администратора', kk: 'Әкімші панелі' })}</h1>
           <p className="text-sm text-muted-foreground">{tl({ ru: 'Введите пароль для доступа', kk: 'Кіру үшін құпия сөзді енгізіңіз' })}</p>
         </div>
-        <form className="flex flex-col gap-3" onSubmit={async (e) => {
-          e.preventDefault()
-          setError(false)
-          setBusy(true)
-          try {
-            const res = await fetch('/api/admin-login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ password }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (res.ok && data?.ok) {
-              setAdminSession()
-              onUnlock()
-              return
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setError(false)
+            setBusy(true)
+            try {
+              const res = await fetch('/api/admin-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+              })
+              const data = await res.json().catch(() => ({}))
+              if (res.ok && data?.ok) {
+                setAdminSession()
+                onUnlock()
+                return
+              }
+              if (checkAdminPassword(password)) {
+                setAdminSession()
+                onUnlock()
+                return
+              }
+              setError(true)
+            } catch {
+              if (checkAdminPassword(password)) {
+                setAdminSession()
+                onUnlock()
+              } else setError(true)
+            } finally {
+              setBusy(false)
             }
-            if (checkAdminPassword(password)) {
-              setAdminSession()
-              onUnlock()
-              return
-            }
-            setError(true)
-          } catch {
-            if (checkAdminPassword(password)) {
-              setAdminSession()
-              onUnlock()
-            } else setError(true)
-          } finally {
-            setBusy(false)
-          }
-        }}>
+          }}
+        >
           <input
             type="password"
             value={password}
@@ -108,81 +114,135 @@ function AdminGate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 export function AdminApp() {
-  const { tl, maintenanceMode, setMaintenanceMode } = useStore()
+  const { tl, students, maintenanceMode, setMaintenanceMode, bookings, deletedRecords } = useStore()
+  const [active, setActive] = useState('students')
   const [unlocked, setUnlocked] = useState(false)
-  const [section, setSection] = useState(sections[0].id)
+  const [checked, setChecked] = useState(false)
+  const current = sections.find((s) => s.id === active) || sections[0]
+  const pending = students.filter((s) => s.status === 'pending').length
+  const bookingCount = bookings.length
+  const deletedCount = deletedRecords?.length || 0
 
   useEffect(() => {
     setUnlocked(hasAdminSession())
+    setChecked(true)
   }, [])
+
+  if (!checked) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
 
   if (!unlocked) return <AdminGate onUnlock={() => setUnlocked(true)} />
 
-  const Active = sections.find((s) => s.id === section)?.Comp || sections[0].Comp
-
   return (
-    <div className="flex min-h-dvh flex-col bg-muted/40">
-      <header className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+    <div className="flex min-h-dvh flex-col bg-muted/50 lg:flex-row">
+      {/* Left sidebar — old layout */}
+      <aside className="shrink-0 bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:flex-col">
+        <div className="flex items-center justify-between gap-2 p-4">
+          <div className="flex items-center gap-2">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground">
+              <Car className="size-5" aria-hidden="true" />
+            </span>
+            <div className="leading-tight text-left">
+              <p className="font-extrabold">AvtoEmir</p>
+              <p className="text-[11px] opacity-70">{tl({ ru: 'Панель администратора', kk: 'Әкімші панелі' })}</p>
+            </div>
+          </div>
+          <LangToggle tone="dark" className="lg:hidden" />
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-2 pb-3">
+          <ul className="flex flex-row gap-1 overflow-x-auto px-2 lg:flex-col lg:overflow-visible lg:px-0">
+            {sections.map((s) => {
+              const Icon = s.icon
+              const on = active === s.id
+              return (
+                <li key={s.id} className="shrink-0 lg:w-full">
+                  <button
+                    type="button"
+                    onClick={() => setActive(s.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors',
+                      on
+                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                        : 'opacity-80 hover:bg-sidebar-accent hover:opacity-100',
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{tl(s.label)}</span>
+                    {s.id === 'students' && pending > 0 && (
+                      <span className="ml-auto rounded-full bg-primary/20 px-1.5 text-xs font-bold">{pending}</span>
+                    )}
+                    {s.id === 'bookings' && bookingCount > 0 && (
+                      <span className="ml-auto rounded-full bg-primary/20 px-1.5 text-xs font-bold">{bookingCount}</span>
+                    )}
+                    {s.id === 'deleted' && deletedCount > 0 && (
+                      <span className="ml-auto rounded-full bg-primary/20 px-1.5 text-xs font-bold">{deletedCount}</span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+
+        <div className="hidden space-y-2 p-4 lg:block">
           <Link
             href="/"
-            className="flex size-9 items-center justify-center rounded-xl border bg-background text-muted-foreground hover:bg-muted"
-            aria-label="Back"
+            className="flex items-center gap-2 rounded-lg border border-sidebar-border px-3 py-2 text-left text-sm opacity-80 hover:opacity-100"
           >
-            <ArrowLeft className="size-4" />
+            <Smartphone className="size-4" aria-hidden="true" />
+            {tl({ ru: 'Приложение студента', kk: 'Студент қосымшасы' })}
           </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-extrabold">{tl({ ru: 'Админ-панель', kk: 'Әкімші панелі' })}</h1>
-            <p className="truncate text-xs text-muted-foreground">AvtoEmir</p>
-          </div>
-          <LangToggle />
         </div>
-        <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-3">
-          {sections.map((s) => {
-            const Icon = s.icon
-            const on = section === s.id
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSection(s.id)}
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
-                  on ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden="true" />
-                {tl(s.label)}
-              </button>
-            )
-          })}
-        </div>
-      </header>
+      </aside>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 p-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-3">
-          <div className="flex items-center gap-2 text-sm">
-            <Wrench className="size-4 text-muted-foreground" aria-hidden="true" />
-            <span className="font-semibold">{tl({ ru: 'Режим обслуживания', kk: 'Қызмет көрсету режимі' })}</span>
-            <span className="text-muted-foreground">
-              {maintenanceMode
-                ? tl({ ru: 'включён — студенты видят заглушку', kk: 'қосулы' })
-                : tl({ ru: 'выключен', kk: 'өшірулі' })}
-            </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 border-b bg-card px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3 text-left">
+            <Link
+              href="/"
+              aria-label={tl({ ru: 'Назад', kk: 'Артқа' })}
+              className="text-muted-foreground hover:text-foreground lg:hidden"
+            >
+              <ArrowLeft className="size-5" aria-hidden="true" />
+            </Link>
+            <h1 className="truncate text-xl font-bold">{tl(current.label)}</h1>
           </div>
-          <Button
-            size="sm"
-            variant={maintenanceMode ? 'default' : 'outline'}
-            onClick={() => setMaintenanceMode(!maintenanceMode)}
-          >
-            <Smartphone className="size-3.5" aria-hidden="true" />
-            {maintenanceMode
-              ? tl({ ru: 'Выключить', kk: 'Өшіру' })
-              : tl({ ru: 'Включить', kk: 'Қосу' })}
-          </Button>
-        </div>
-        <Active />
-      </main>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant={maintenanceMode ? 'default' : 'outline'}
+              size="sm"
+              className={cn('gap-1.5', maintenanceMode && 'bg-warning text-foreground hover:bg-warning/90')}
+              onClick={() => setMaintenanceMode(!maintenanceMode)}
+            >
+              <Wrench className="size-4" aria-hidden="true" />
+              {maintenanceMode
+                ? tl({ ru: 'Снять техработы', kk: 'Техжұмысты өшіру' })
+                : tl({ ru: 'Техработы', kk: 'Техжұмыс' })}
+            </Button>
+            <LangToggle tone="dark" className="hidden lg:inline-flex" />
+          </div>
+        </header>
+        {maintenanceMode && (
+          <div className="border-b border-warning/40 bg-warning/15 px-5 py-2 text-left text-sm font-medium">
+            {tl({
+              ru: 'Включён режим технических работ — у всех учеников приложение заблокировано',
+              kk: 'Техникалық жұмыс режимі қосулы — барлық оқушыларда қосымша бұғатталған',
+            })}
+          </div>
+        )}
+        <main className="flex-1 p-4 lg:p-6">
+          <div className="mx-auto max-w-6xl">
+            <current.Comp />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
