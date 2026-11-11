@@ -18,7 +18,7 @@ import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
   mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
-  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged,
+  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe,
   type DeletedRecord,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
@@ -226,7 +226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (c && typeof c.maintenanceMode === 'boolean') setMaintenanceModeState(c.maintenanceMode)
       })
     }
-    const id = setInterval(tick, 2000)
+    const id = setInterval(tick, 8000)
     return () => clearInterval(id)
   }, [ready])
 
@@ -526,8 +526,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       setBookings((list) => {
+        const removed = list.filter((b) => b.studentId === id).map((b) => b.id)
         const next = list.filter((b) => b.studentId !== id)
-        void saveBookingsMerged(next).then((merged) => { if (merged) setBookings(merged) })
+        void saveBookingsMerged(next, removed).then((merged) => { if (merged) setBookings(merged) })
         return next
       })
       setResults((list) => {
@@ -589,8 +590,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
       setBookings((list) => {
+        const removed = list.filter((b) => b.studentId && ids.includes(b.studentId)).map((b) => b.id)
         const next = list.filter((b) => !b.studentId || !ids.includes(b.studentId))
-        void saveBookingsMerged(next).then((merged) => { if (merged) setBookings(merged) })
+        void saveBookingsMerged(next, removed).then((merged) => { if (merged) setBookings(merged) })
         return next
       })
       setResults((list) => {
@@ -694,7 +696,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     instructors,
     setInstructors: (i) => {
       setInstructors(i)
-      void saveSharedKey('instructors', i)
+      void saveInstructorsSafe(i).then((merged) => {
+        if (merged) setInstructors(merged)
+      })
     },
     reviews,
     setReviews: (r) => {
@@ -722,7 +726,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setMessages((list) => {
         const next = [...list, item]
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next).then((res) => {
+          if (res?.messages) setMessages(res.messages.filter((m) => !new Set(res.droppedMessageIds).has(m.id)))
+        })
         return next
       })
     },
@@ -738,7 +744,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setMessages((list) => {
         const next = [...list, item]
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next).then((res) => {
+          if (res?.messages) setMessages(res.messages.filter((m) => !new Set(res.droppedMessageIds).has(m.id)))
+        })
         return next
       })
     },
@@ -797,7 +805,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     cancelBooking: (id) => {
       setBookings((list) => {
         const next = list.filter((b) => b.id !== id)
-        void saveBookingsMerged(next).then((merged) => {
+        void saveBookingsMerged(next, [id]).then((merged) => {
           if (merged) setBookings(merged)
         })
         return next

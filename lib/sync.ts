@@ -538,12 +538,39 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
   return merged
 }
 
-export async function saveBookingsMerged(local: Booking[]): Promise<Booking[]> {
+/** Local list is source of truth for which booking IDs exist (supports cancel). */
+export async function saveBookingsMerged(local: Booking[], removedIds: string[] = []): Promise<Booking[]> {
   const cloud = await loadSharedKeys(['bookings'])
   const remote = (cloud?.bookings || []) as Booking[]
-  const merged = mergeById(remote, local)
+  const localIds = new Set(local.map((b) => b.id))
+  const removed = new Set(removedIds)
+  const map = new Map<string, Booking>()
+  for (const b of local) if (b?.id && !removed.has(b.id)) map.set(b.id, b)
+  for (const b of remote) {
+    if (!b?.id || removed.has(b.id) || localIds.has(b.id)) continue
+    map.set(b.id, b)
+  }
+  const merged = [...map.values()]
   await saveSharedKey('bookings', merged)
   return merged
+}
+
+
+/** Merge messages so new local messages are not lost; respect dropped IDs. */
+export async function saveMessagesMerged(local: Message[], droppedExtra: string[] = []): Promise<{ messages: Message[]; droppedMessageIds: string[] }> {
+  const cloud = await loadSharedKeys(['messages', 'droppedMessageIds'])
+  const remote = (cloud?.messages || []) as Message[]
+  const dropped = new Set([...(cloud?.droppedMessageIds || []), ...droppedExtra])
+  const map = new Map<string, Message>()
+  for (const m of remote) if (m?.id && !dropped.has(m.id)) map.set(m.id, m)
+  for (const m of local) if (m?.id && !dropped.has(m.id)) map.set(m.id, m)
+  const merged = [...map.values()]
+  const droppedArr = [...dropped]
+  await Promise.all([
+    saveSharedKey('messages', merged),
+    saveSharedKey('droppedMessageIds', droppedArr),
+  ])
+  return { messages: merged, droppedMessageIds: droppedArr }
 }
 
 export async function forceSaveResults(list: TestResult[]): Promise<void> {
