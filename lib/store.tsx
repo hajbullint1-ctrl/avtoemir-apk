@@ -161,10 +161,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.instructors?.length) setInstructors(cloud.instructors)
       if (cloud?.notices?.length) setNotices(cloud.notices)
       if (cloud?.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
-      if (cloud?.theory?.length) setTheory((prev) => ensureTheoryContent(mergeById(prev, cloud.theory!)))
-      if (cloud?.questions?.length) setQuestions((prev) => mergeById(prev, cloud.questions!))
-      if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns((prev) => mergeById(prev, cloud.roadSigns!))
-      if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews((prev) => mergeById(prev, cloud.reviews!))
+      if (cloud?.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
+      if (cloud?.questions?.length) setQuestions(cloud.questions)
+      if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
+      if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
       if (cloud?.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
         setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
@@ -197,12 +197,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(() => {
       void saveSharedToCloud({
         school, instructors, notices, students, theory, questions, reviews,
-        bookings, accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
+        accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress, roadSigns,
       })
     }, 1200)
     return () => clearTimeout(t)
-  }, [ready, school, instructors, notices, students, theory, questions, reviews, bookings, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, school, instructors, notices, students, theory, questions, reviews, learnedSigns, profiles, theoryProgress, roadSigns])
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
