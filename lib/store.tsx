@@ -94,7 +94,7 @@ type Store = {
   results: TestResult[]
   addResult: (score: number, total: number) => void
   clearResults: () => void
-  learnedSigns: string[]
+  learnedSigns: Record<string, string[]>
   toggleSign: (id: string, known: boolean) => void
   roadSigns: RoadSign[]
   setRoadSigns: (s: RoadSign[]) => void
@@ -119,7 +119,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [notices, setNotices] = useState(seedNotices)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [results, setResults] = useState<TestResult[]>([])
-  const [learnedSigns, setLearnedSigns] = useState<string[]>([])
+  const [learnedSigns, setLearnedSigns] = useState<Record<string, string[]>>({})
   const [roadSigns, setRoadSigns] = useState<RoadSign[]>(seedRoadSigns)
   const [profiles, setProfiles] = useState<ProfileRow[]>([])
   const [theoryProgress, setTheoryProgress] = useState<Record<string, string[]>>({})
@@ -142,7 +142,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(p.notices)) setNotices(p.notices as Notice[])
       if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
       if (Array.isArray(p.results)) setResults(p.results as TestResult[])
-      if (Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as string[])
+      if (p.learnedSigns && typeof p.learnedSigns === "object" && !Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as Record<string, string[]>)
       if (Array.isArray(p.roadSigns)) setRoadSigns(p.roadSigns as RoadSign[])
       if (Array.isArray(p.profiles)) setProfiles(p.profiles as ProfileRow[])
       if (p.theoryProgress && typeof p.theoryProgress === 'object') setTheoryProgress(p.theoryProgress as Record<string, string[]>)
@@ -184,7 +184,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(cloud?.results)) {
         setResults(cloud.results!.length ? mergeById([], cloud.results!) : [])
       }
-      if (cloud?.learnedSigns) setLearnedSigns((prev) => mergeStringLists(prev, cloud.learnedSigns!))
+      if (cloud?.learnedSigns && !Array.isArray(cloud.learnedSigns)) setLearnedSigns((prev) => mergeProgressMaps(prev, cloud.learnedSigns!))
       if (cloud?.theoryProgress) setTheoryProgress((prev) => mergeProgressMaps(prev, cloud.theoryProgress!))
       if (cloud?.presence) setPresence((prev) => ({ ...prev, ...cloud.presence }))
       if (typeof cloud?.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
@@ -874,9 +874,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     learnedSigns,
     toggleSign: (id, known) => {
-      setLearnedSigns((list) => {
-        const next = known ? [...list, id] : list.filter((x) => x !== id)
-        return next
+      const sid = session?.accountId
+      if (!sid) return
+      setLearnedSigns((prev) => {
+        const mine = prev[sid] || []
+        const next = known ? [...new Set([...mine, id])] : mine.filter((x) => x !== id)
+        return { ...prev, [sid]: next }
       })
     },
     roadSigns,

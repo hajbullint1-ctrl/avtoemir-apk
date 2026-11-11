@@ -23,7 +23,7 @@ export type SharedSlice = {
   accounts?: Account[]
   recovery?: PasswordRecoveryRequest[]
   results?: TestResult[]
-  learnedSigns?: string[]
+  learnedSigns?: Record<string, string[]>
   profiles?: ProfileRow[]
   theoryProgress?: Record<string, string[]>
   roadSigns?: RoadSign[]
@@ -259,7 +259,8 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
       if (Array.isArray(d)) out.results = d as TestResult[]
       break
     case 'learnedSigns':
-      if (Array.isArray(d)) out.learnedSigns = d as string[]
+      if (d && typeof d === 'object' && !Array.isArray(d)) out.learnedSigns = d as Record<string, string[]>
+      else if (Array.isArray(d)) out.learnedSigns = { _legacy: d as string[] }
       break
     case 'profiles':
       if (Array.isArray(d)) out.profiles = d as ProfileRow[]
@@ -659,7 +660,8 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.learnedSigns) {
     tasks.push((async () => {
       const cloud = await loadSharedKeys(['learnedSigns'])
-      await saveSharedKey('learnedSigns', mergeStringLists(cloud?.learnedSigns || [], slice.learnedSigns || []))
+      const remote = (cloud?.learnedSigns && !Array.isArray(cloud.learnedSigns)) ? cloud.learnedSigns : {}
+      await saveSharedKey('learnedSigns', mergeProgressMaps(remote, slice.learnedSigns || {}))
     })())
   }
   if (slice.profiles) tasks.push(saveSharedKey('profiles', slice.profiles))

@@ -155,7 +155,7 @@ function Curriculum() {
 }
 
 function Flashcards() {
-  const { t, tl, learnedSigns, toggleSign, roadSigns } = useStore()
+  const { t, tl, learnedSigns, toggleSign, roadSigns, me } = useStore()
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
   const signs = roadSigns.length ? roadSigns : []
@@ -180,7 +180,7 @@ function Flashcards() {
       title={t('roadSigns')}
       action={
         <span className="text-xs font-medium text-muted-foreground">
-          {t('learned')}: {learnedSigns.length}/{signs.length}
+          {t('learned')}: {(learnedSigns[me.id] || []).length}/{signs.length}
         </span>
       }
     >
@@ -250,7 +250,7 @@ function Flashcards() {
             key={s.id}
             className={cn(
               'size-1.5 rounded-full',
-              i === index ? 'bg-primary' : learnedSigns.includes(s.id) ? 'bg-success' : 'bg-border',
+              i === index ? 'bg-primary' : (learnedSigns[me.id] || []).includes(s.id) ? 'bg-success' : 'bg-border',
             )}
           />
         ))}
