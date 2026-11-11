@@ -41,7 +41,6 @@ type Store = {
   session: Session | null
   login: (phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
   register: (fullName: string, phone: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
-  /** Skip auth — for Google Play reviewers and demo */
   loginAsGuest: () => void
   logout: () => void
   deleteMyAccount: () => { ok: true } | { ok: false; error: string }
@@ -60,6 +59,8 @@ type Store = {
   archiveStudent: (id: string) => void
   unarchiveStudent: (id: string) => void
   deleteStudent: (id: string) => void
+  /** Permanently remove all approved students + accounts (cleanup) */
+  purgeApprovedStudents: () => number
   school: School
   setSchool: (s: School) => void
   theory: TheoryTopic[]
@@ -160,7 +161,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       if (cloud?.instructors?.length) setInstructors(cloud.instructors)
       if (cloud?.notices?.length) setNotices(cloud.notices)
-      if (cloud?.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
+      if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
+        setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
+      }
       if (cloud?.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
       if (cloud?.questions?.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
@@ -170,7 +173,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
       }
       if (cloud?.bookings) setBookings(cloud.bookings)
-      if (cloud?.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
+      if (cloud?.accounts || cloud?.deletedAccountIds?.length) {
+        mergeAccountsFromCloud(cloud.accounts || [], cloud.deletedAccountIds || [])
+      }
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
       if (Array.isArray(cloud?.results)) {
         setResults(cloud.results!.length ? mergeById([], cloud.results!) : [])
@@ -225,14 +230,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const pull = async () => {
       const cloud = await loadSharedKeys(LIVE_KEYS)
       if (!cloud) return
-      if (cloud.students?.length) setStudents((prev) => mergeStudents(prev, cloud.students!, cloud.deletedStudentIds || []))
+      if (cloud.students?.length || cloud.deletedStudentIds?.length) {
+        setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
+      }
       if (cloud.notices) setNotices(cloud.notices)
       if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
       if (cloud.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
         setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
       }
-      if (cloud.accounts?.length) mergeAccountsFromCloud(cloud.accounts, cloud.deletedAccountIds || [])
+      if (cloud.accounts || cloud.deletedAccountIds?.length) {
+        mergeAccountsFromCloud(cloud.accounts || [], cloud.deletedAccountIds || [])
+      }
+      if (cloud.deletedStudentIds?.length) {
+        const ban = new Set(cloud.deletedStudentIds)
+        setStudents((prev) => prev.filter((s) => !ban.has(s.id)))
+      }
       if (Array.isArray(cloud.results) && Date.now() > resultsIgnoreUntil.current) {
         setResults(cloud.results)
       }
@@ -263,7 +276,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [students, session])
 
-  // Keep Android home-screen certificate widget in sync
   useEffect(() => {
     if (!ready) return
     const loggedIn = !!(session && session.accountId && session.accountId !== 'guest_play_review')
@@ -276,6 +288,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       status: me.status || 'draft',
     })
   }, [ready, session, me.id, me.name, me.readyDate, me.status, school.name])
+
+  // Kick student to login if their account was deleted from admin
+  useEffect(() => {
+    if (!ready || !session?.accountId) return
+    const id = session.accountId
+    if (id === 'guest' || id === 'guest_play_review') return
+
+    const locallyGone = !listAccounts().some((a) => a.id === id)
+    if (locallyGone) {
+      clearSession()
+      setSession(null)
+      return
+    }
+
+    if (!isSupabaseConfigured) return
+    void loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts']).then((cloud) => {
+      if (!cloud) return
+      const delA = new Set(cloud.deletedAccountIds || [])
+      const delS = new Set(cloud.deletedStudentIds || [])
+      const inCloudAccounts = (cloud.accounts || []).some((a) => a?.id === id)
+      if (delA.has(id) || delS.has(id) || (Array.isArray(cloud.accounts) && !inCloudAccounts)) {
+        deleteAccount(id)
+        clearSession()
+        setSession(null)
+      }
+    })
+  }, [ready, session?.accountId, students])
 
   const updateStudent = useCallback((id: string, fn: (s: Student) => Student) => {
     if (!id || id === 'guest') return
@@ -312,6 +351,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     login: async (phone, password) => {
       const r = await loginAccount(phone, password)
       if (r.ok) {
+        if (isSupabaseConfigured) {
+          const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
+          const id = r.session.accountId
+          const banned = new Set([...(cloud?.deletedAccountIds || []), ...(cloud?.deletedStudentIds || [])])
+          if (banned.has(id)) {
+            deleteAccount(id)
+            return { ok: false as const, error: 'notfound' }
+          }
+        }
         setSession(r.session)
         setStudents((list) => {
           if (list.some((s) => s.id === r.session.accountId)) return list
@@ -434,21 +482,93 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         archivedAt: null,
       })),
     deleteStudent: (id) => {
-      if (!id || id === 'me') return
+      if (!id || id === 'me' || id === 'guest' || id === 'guest_play_review') return
       deleteAccount(id)
       setStudents((list) => {
         const next = list.filter((s) => s.id !== id && s.id !== 'me')
         void saveSharedKey('students', next)
         return next
       })
-      void saveSharedKey('accounts', listAccounts().filter((a) => a.id !== id))
+      setBookings((list) => {
+        const next = list.filter((b) => b.studentId !== id)
+        void saveSharedKey('bookings', next)
+        return next
+      })
+      setResults((list) => {
+        const next = list.filter((r) => r.studentId !== id)
+        void forceSaveResults(next)
+        return next
+      })
+      setMessages((list) => {
+        const next = list.filter((m) => m.studentId !== id)
+        void saveSharedKey('messages', next)
+        return next
+      })
+      setTheoryProgress((prev) => {
+        if (!prev[id]) return prev
+        const { [id]: _drop, ...rest } = prev
+        return rest
+      })
+      const accountsNext = listAccounts().filter((a) => a.id !== id)
+      void saveSharedKey('accounts', accountsNext)
       void (async () => {
-        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds'])
+        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts', 'students'])
         const delA = [...new Set([...(cloud?.deletedAccountIds || []), id])]
         const delS = [...new Set([...(cloud?.deletedStudentIds || []), id])]
         await saveSharedKey('deletedAccountIds', delA)
         await saveSharedKey('deletedStudentIds', delS)
+        const cloudAccounts = (cloud?.accounts || accountsNext).filter((a: { id?: string }) => a?.id && a.id !== id)
+        const cloudStudents = (cloud?.students || []).filter((s: { id?: string }) => s?.id && s.id !== id && s.id !== 'me')
+        await saveSharedKey('accounts', cloudAccounts)
+        await saveSharedKey('students', cloudStudents)
       })()
+    },
+    purgeApprovedStudents: () => {
+      const approved = students.filter((s) => s.status === 'approved' && s.id !== 'me')
+      if (!approved.length) return 0
+      const ids = approved.map((s) => s.id)
+      for (const id of ids) {
+        deleteAccount(id)
+      }
+      setStudents((list) => {
+        const next = list.filter((s) => !ids.includes(s.id) && s.id !== 'me')
+        void saveSharedKey('students', next)
+        return next
+      })
+      setBookings((list) => {
+        const next = list.filter((b) => !b.studentId || !ids.includes(b.studentId))
+        void saveSharedKey('bookings', next)
+        return next
+      })
+      setResults((list) => {
+        const next = list.filter((r) => !r.studentId || !ids.includes(r.studentId))
+        void forceSaveResults(next)
+        return next
+      })
+      setMessages((list) => {
+        const next = list.filter((m) => !m.studentId || !ids.includes(m.studentId))
+        void saveSharedKey('messages', next)
+        return next
+      })
+      setTheoryProgress((prev) => {
+        const rest = { ...prev }
+        for (const id of ids) delete rest[id]
+        return rest
+      })
+      const accountsNext = listAccounts().filter((a) => !ids.includes(a.id))
+      void saveSharedKey('accounts', accountsNext)
+      void (async () => {
+        const cloud = await loadSharedKeys(['deletedAccountIds', 'deletedStudentIds', 'accounts', 'students'])
+        const delA = [...new Set([...(cloud?.deletedAccountIds || []), ...ids])]
+        const delS = [...new Set([...(cloud?.deletedStudentIds || []), ...ids])]
+        await saveSharedKey('deletedAccountIds', delA)
+        await saveSharedKey('deletedStudentIds', delS)
+        const cloudAccounts = (cloud?.accounts || accountsNext).filter((a: { id?: string }) => a?.id && !ids.includes(a.id))
+        const cloudStudents = (cloud?.students || []).filter((s: { id?: string }) => s?.id && !ids.includes(s.id) && s.id !== 'me')
+        await saveSharedKey('accounts', cloudAccounts)
+        await saveSharedKey('students', cloudStudents)
+      })()
+      return ids.length
     },
     school,
     setSchool: (s) => {
@@ -594,7 +714,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next
       })
     },
-    cancelBooking: (id, opts) => {
+    cancelBooking: (id) => {
       setBookings((list) => {
         const next = list.filter((b) => b.id !== id)
         void saveSharedKey('bookings', next)
