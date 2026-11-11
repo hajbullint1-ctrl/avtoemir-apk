@@ -777,7 +777,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setNotices((list) => list.filter((n) => n.id !== id))
     },
     broadcastNotice: (title, body) => {
-      const n: Notice = { id: uid(), title, body, date: nowStamp(), read: false }
+      const n: Notice = {
+        id: uid(),
+        kind: 'announce',
+        title,
+        body,
+        time: nowStamp(),
+        read: false,
+      }
       setNotices((list) => {
         const next = [n, ...list]
         void saveSharedKey('notices', next)

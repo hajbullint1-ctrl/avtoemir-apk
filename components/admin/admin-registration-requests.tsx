@@ -27,11 +27,15 @@ export function AdminRegistrationRequests() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   const load = async () => {
     setLoading(true)
+    setLoadError(false)
     const list = await listRegistrationRequests()
     setItems(list)
+    // If still empty after a real attempt, surface a soft error (table/RLS/network)
+    if (list.length === 0) setLoadError(true)
     setLoading(false)
   }
 
@@ -79,6 +83,14 @@ export function AdminRegistrationRequests() {
 
   return (
     <div className="flex flex-col gap-4">
+      {loadError && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          {tl({
+            ru: 'Не удалось загрузить заявки (проверьте подключение или таблицу registration_requests в Supabase).',
+            kk: 'Өтініштер жүктелмеді (қосылымды немесе Supabase-тегі registration_requests кестесін тексеріңіз).',
+          })}
+        </p>
+      )}
       <section className="rounded-2xl border bg-card p-5">
         <div className="mb-4 flex items-center gap-2">
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">

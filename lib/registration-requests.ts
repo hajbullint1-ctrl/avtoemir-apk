@@ -14,6 +14,17 @@ import {
 import { saveSharedKey } from './sync'
 import type { Student, Category } from './data'
 
+
+function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) },
+    )
+  })
+}
+
 export type RegistrationRequest = {
   id: string
   full_name: string
@@ -45,13 +56,16 @@ export async function submitRegistrationRequest(input: {
   if (phone.length < 10) return { ok: false, error: 'phone' }
 
   // Prevent duplicate pending for same phone
-  const { data: existing } = await sb
-    .from('registration_requests')
-    .select('id')
-    .eq('phone', phone)
-    .eq('status', 'pending')
-    .limit(1)
-  if (existing && existing.length > 0) return { ok: false, error: 'exists' }
+  try {
+    const { data: existing } = await withTimeout(
+      sb.from('registration_requests').select('id').eq('phone', phone).eq('status', 'pending').limit(1),
+      8000,
+    )
+    if (existing && existing.length > 0) return { ok: false, error: 'exists' }
+  } catch (e) {
+    console.warn('[reg] duplicate check timeout:', e)
+    // continue anyway
+  }
 
   const row = {
     id: uid(),
@@ -63,10 +77,15 @@ export async function submitRegistrationRequest(input: {
     created_at: new Date().toISOString(),
   }
 
-  const { error } = await sb.from('registration_requests').insert(row)
-  if (error) {
-    console.warn('[reg] submit:', error.message)
-    return { ok: false, error: 'save' }
+  try {
+    const { error } = await withTimeout(sb.from('registration_requests').insert(row), 10000)
+    if (error) {
+      console.warn('[reg] submit:', error.message)
+      return { ok: false, error: 'save' }
+    }
+  } catch (e) {
+    console.warn('[reg] submit timeout/exception:', e)
+    return { ok: false, error: 'timeout' }
   }
   return { ok: true }
 }
@@ -74,15 +93,20 @@ export async function submitRegistrationRequest(input: {
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
   const sb = getSupabase()
   if (!sb) return []
-  const { data, error } = await sb
-    .from('registration_requests')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) {
-    console.warn('[reg] list:', error.message)
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('registration_requests').select('*').order('created_at', { ascending: false }),
+      10000,
+    )
+    if (error) {
+      console.warn('[reg] list:', error.message)
+      return []
+    }
+    return (data ?? []) as RegistrationRequest[]
+  } catch (e) {
+    console.warn('[reg] list timeout/exception:', e)
     return []
   }
-  return (data ?? []) as RegistrationRequest[]
 }
 
 export async function setRegistrationRequestStatus(
