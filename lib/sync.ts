@@ -573,6 +573,24 @@ export async function saveMessagesMerged(local: Message[], droppedExtra: string[
   return { messages: merged, droppedMessageIds: droppedArr }
 }
 
+
+/** Notices: local list is source of truth for which IDs exist. */
+export async function saveNoticesMerged(local: Notice[], removedIds: string[] = []): Promise<Notice[]> {
+  const cloud = await loadSharedKeys(['notices'])
+  const remote = (cloud?.notices || []) as Notice[]
+  const localIds = new Set(local.map((n) => n.id))
+  const removed = new Set(removedIds)
+  const map = new Map<string, Notice>()
+  for (const n of local) if (n?.id && !removed.has(n.id)) map.set(n.id, n)
+  for (const n of remote) {
+    if (!n?.id || removed.has(n.id) || localIds.has(n.id)) continue
+    map.set(n.id, n)
+  }
+  const merged = [...map.values()]
+  await saveSharedKey('notices', merged)
+  return merged
+}
+
 export async function forceSaveResults(list: TestResult[]): Promise<void> {
   await saveSharedKey('results', list)
 }

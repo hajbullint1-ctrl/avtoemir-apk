@@ -18,7 +18,7 @@ import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
   mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
-  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe,
+  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe, saveNoticesMerged, saveContentListSafe,
   type DeletedRecord,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
@@ -675,7 +675,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     theory,
     setTheory: (t) => {
       setTheory(t)
-      void saveSharedKey('theory', t)
+      void saveContentListSafe('theory', t).then((merged) => {
+        if (merged) setTheory(ensureTheoryContent(merged as TheoryTopic[]))
+      })
     },
     profiles,
     theoryProgress,
@@ -691,7 +693,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     questions,
     setQuestions: (q) => {
       setQuestions(q)
-      void saveSharedKey('questions', q)
+      void saveContentListSafe('questions', q).then((merged) => {
+        if (merged) setQuestions(merged)
+      })
     },
     instructors,
     setInstructors: (i) => {
@@ -703,7 +707,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reviews,
     setReviews: (r) => {
       setReviews(r)
-      void saveSharedKey('reviews', r)
+      void saveContentListSafe('reviews', r).then((merged) => {
+        if (merged) setReviews(merged)
+      })
     },
     addReview: (r) => {
       const item: Review = { ...r, id: uid(), date: nowStamp(), visible: true }
@@ -753,19 +759,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteMessage: (id) => {
       setMessages((list) => {
         const next = list.filter((m) => m.id !== id)
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next, [id]).then((res) => {
+          if (res?.messages) setMessages(res.messages.filter((m) => !new Set(res.droppedMessageIds).has(m.id)))
+        })
         return next
       })
-      void (async () => {
-        const cloud = await loadSharedKeys(['droppedMessageIds'])
-        const next = [...new Set([...(cloud?.droppedMessageIds || []), id])]
-        await saveSharedKey('droppedMessageIds', next)
-      })()
     },
     deleteChat: (thread, studentId) => {
       setMessages((list) => {
+        const removed = list.filter((m) => m.thread === thread).map((m) => m.id)
         const next = list.filter((m) => m.thread !== thread)
-        void saveSharedKey('messages', next)
+        void saveMessagesMerged(next, removed).then((res) => {
+          if (res?.messages) setMessages(res.messages.filter((m) => !new Set(res.droppedMessageIds).has(m.id)))
+        })
         return next
       })
     },
@@ -787,14 +793,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setNotices((list) => {
         const next = [n, ...list]
-        void saveSharedKey('notices', next)
+        void saveNoticesMerged(next).then((merged) => {
+          if (merged) setNotices(merged)
+        })
         return next
       })
     },
     deleteNotice: (id) => {
       setNotices((list) => {
         const next = list.filter((n) => n.id !== id)
-        void saveSharedKey('notices', next)
+        void saveNoticesMerged(next, [id]).then((merged) => {
+          if (merged) setNotices(merged)
+        })
         return next
       })
     },
@@ -850,7 +860,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     roadSigns,
     setRoadSigns: (s) => {
       setRoadSigns(s)
-      void saveSharedKey('roadSigns', s)
+      void saveContentListSafe('roadSigns', s).then((merged) => {
+        if (merged) setRoadSigns(merged)
+      })
     },
     presence,
     maintenanceMode,
