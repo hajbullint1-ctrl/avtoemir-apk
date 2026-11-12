@@ -52,15 +52,27 @@ export function AdminRegistrationRequests() {
     try {
       const res = await approveRegistrationRequest(r)
       if (res.ok) {
+        // Optimistic UI — no second full list fetch that feels laggy
+        setItems((list) =>
+          list.map((x) =>
+            x.id === r.id
+              ? {
+                  ...x,
+                  status: 'approved' as const,
+                  reviewed_at: new Date().toISOString(),
+                  note: res.tempPassword ? `temp:${res.tempPassword}` : x.note,
+                }
+              : x,
+          ),
+        )
         setInfo(
           res.tempPassword
             ? tl({
-                ru: `Одобрено. Временный пароль: ${res.tempPassword}. Попросите ученика войти и сменить его через «Забыли пароль?».`,
-                kk: `Мақұлданды. Уақытша құпия сөз: ${res.tempPassword}. Оқушыға «Құпия сөзді ұмыттыңыз ба?» арқылы өзгертуді айтыңыз.`,
+                ru: `Одобрено. Временный пароль: ${res.tempPassword}. Ученик на входе вводит номер → увидит пароль (или «Проверить статус заявки»).`,
+                kk: `Мақұлданды. Уақытша құпия сөз: ${res.tempPassword}. Оқушы кіруде нөмірді енгізеді → құпия сөзді көреді.`,
               })
             : tl({ ru: 'Уже был в системе — заявка отмечена одобренной.', kk: 'Жүйеде болған — өтініш мақұлданды деп белгіленді.' }),
         )
-        await load()
       } else {
         setInfo(tl({ ru: 'Не удалось одобрить', kk: 'Мақұлдау сәтсіз' }))
       }

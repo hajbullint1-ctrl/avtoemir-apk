@@ -130,21 +130,12 @@ export async function submitRegistrationRequest(input: {
 }
 
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
-  // Primary: app_state
-  const fromState = await loadRegRequests()
-  if (fromState.length) return fromState
-  // Fallback: dedicated table
-  const sb = getSupabase()
-  if (!sb) return fromState
+  // Only app_state — never wait on the secondary table (was up to 8s)
   try {
-    const { data, error } = await withTimeout(
-      sb.from('registration_requests').select('*').order('created_at', { ascending: false }),
-      8000,
-    )
-    if (error) return fromState
-    return (data ?? []) as RegistrationRequest[]
-  } catch {
-    return fromState
+    return await withTimeout(loadRegRequests(), 4000)
+  } catch (e) {
+    console.warn('[reg] list timeout:', e)
+    return []
   }
 }
 
@@ -152,36 +143,36 @@ export async function setRegistrationRequestStatus(
   id: string,
   status: 'approved' | 'rejected',
   note?: string,
+  /** Optional: pass current list to avoid an extra load */
+  knownList?: RegistrationRequest[],
 ): Promise<boolean> {
-  // Update app_state
   try {
-    const prev = await loadRegRequests()
+    const prev = knownList ?? (await withTimeout(loadRegRequests(), 4000))
     const next = prev.map((r) =>
-      r.id === id ? { ...r, status, reviewed_at: new Date().toISOString(), note: note ?? null } : r
+      r.id === id ? { ...r, status, reviewed_at: new Date().toISOString(), note: note ?? null } : r,
     )
-    await saveRegRequests(next)
+    await withTimeout(saveRegRequests(next), 4000)
   } catch (e) {
     console.warn('[reg] status app_state:', e)
+    return false
   }
-  // Best-effort table update
+  // Table update never blocks UI
   const sb = getSupabase()
   if (sb) {
-    try {
-      await sb.from('registration_requests').update({
+    void Promise.resolve(
+      sb.from('registration_requests').update({
         status,
         reviewed_at: new Date().toISOString(),
         note: note ?? null,
-      }).eq('id', id)
-    } catch (e) {
-      console.warn('[reg] status table:', e)
-    }
+      }).eq('id', id),
+    ).catch(() => {})
   }
   return true
 }
 
 /**
  * Approve a request: create Account + Student, save to cloud, mark request approved.
- * The new student can log in and use "Забыли пароль?" to set their password.
+ * Batched cloud I/O so admin / phone are not stuck on sequential round-trips.
  */
 export async function approveRegistrationRequest(
   req: RegistrationRequest,
@@ -190,22 +181,48 @@ export async function approveRegistrationRequest(
   const name = req.full_name.trim()
   if (!name || phone.length < 10) return { ok: false, error: 'invalid' }
 
+  const phoneKey = phone.replace(/\D/g, '').slice(-10)
+
+  // One parallel read for everything we need
+  const { loadSharedKeys } = await import('./sync')
+  let cloud: Awaited<ReturnType<typeof loadSharedKeys>> = null
+  try {
+    cloud = await withTimeout(
+      loadSharedKeys(['students', 'notices', 'regCredentials', 'registrationRequests', 'accounts']),
+      6000,
+    )
+  } catch (e) {
+    console.warn('[reg] approve load:', e)
+  }
+
+  // Prefer cloud accounts for "already exists"
+  if (cloud?.accounts?.length) {
+    const { mergeAccountsFromCloud } = await import('./auth')
+    mergeAccountsFromCloud(cloud.accounts)
+  }
+
   const accounts = listAccounts()
-  if (accounts.some((a) => a.phone === phone)) {
-    // Already exists — just mark approved
-    await setRegistrationRequestStatus(req.id, 'approved', 'already-exists')
+  const exists =
+    accounts.some((a) => a.phone === phone || a.phone.replace(/\D/g, '').slice(-10) === phoneKey) ||
+    (cloud?.accounts || []).some(
+      (a: { phone?: string }) =>
+        a.phone === phone || (a.phone || '').replace(/\D/g, '').slice(-10) === phoneKey,
+    )
+
+  const reqList = Array.isArray(cloud?.registrationRequests)
+    ? (cloud!.registrationRequests as RegistrationRequest[])
+    : await loadRegRequests().catch(() => [] as RegistrationRequest[])
+
+  if (exists) {
+    await setRegistrationRequestStatus(req.id, 'approved', 'already-exists', reqList)
     return { ok: true, tempPassword: '' }
   }
 
-  // Unique temporary password per student (phone tail + random)
   const tempPassword = `Emir${phone.replace(/\D/g, '').slice(-4)}${Math.floor(100 + Math.random() * 900)}`
 
   const { createAccountSilent } = await import('./auth')
   const created = await createAccountSilent(name, phone, tempPassword)
   if (!created.ok) return { ok: false, error: created.error }
-
-  // Persist accounts to cloud immediately
-  await saveSharedKey('accounts', listAccounts())
 
   const category = (req.category as Category) || 'B'
   const student: Student = {
@@ -220,22 +237,17 @@ export async function approveRegistrationRequest(
     updatedAt: new Date().toISOString(),
   }
 
-  // Append student to cloud students list
-  const { loadSharedKeys, saveStudentsLocalWins, saveNoticesMerged } = await import('./sync')
-  const cloud = await loadSharedKeys(['students', 'notices'])
-  const remote = (cloud?.students || []) as Student[]
-  const nextStudents = [...remote.filter((s) => s.id !== student.id && s.phone !== phone), student]
-  await saveStudentsLocalWins(nextStudents)
+  const remoteStudents = (cloud?.students || []) as Student[]
+  const nextStudents = [
+    ...remoteStudents.filter((s) => s.id !== student.id && s.phone !== phone),
+    student,
+  ]
 
-  // Targeted notice so student sees acceptance + phone + password after login
   const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
   const notice = {
     id: `n_reg_${created.accountId}_${Date.now().toString(36)}`,
     kind: 'info' as const,
-    title: {
-      ru: 'Заявка одобрена',
-      kk: 'Өтініш мақұлданды',
-    },
+    title: { ru: 'Заявка одобрена', kk: 'Өтініш мақұлданды' },
     body: {
       ru: `Ваша заявка с номером ${phone} принята. Временный пароль: ${tempPassword}. Войдите с этим паролем или нажмите «Забыли пароль?» и задайте свой.`,
       kk: `${phone} нөмірімен жіберілген өтінішіңіз қабылданды. Уақытша құпия сөз: ${tempPassword}. Осы құпия сөзбен кіріңіз немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қойыңыз.`,
@@ -245,25 +257,31 @@ export async function approveRegistrationRequest(
     studentId: created.accountId,
   }
   const prevNotices = Array.isArray(cloud?.notices) ? cloud.notices : []
-  await saveNoticesMerged([notice, ...prevNotices.filter((n) => n.id !== notice.id)])
+  const nextNotices = [notice, ...prevNotices.filter((n) => n.id !== notice.id)]
 
-  // Dedicated cloud map so login screen always finds password by phone
-  const phoneKey = phone.replace(/\D/g, '').slice(-10)
-  try {
-    const credCloud = await loadSharedKeys(['regCredentials'])
-    const map = { ...(credCloud?.regCredentials || {}) }
-    map[phoneKey] = {
-      phone,
-      fullName: name,
-      tempPassword,
-      accountId: created.accountId,
-    }
-    await saveSharedKey('regCredentials', map)
-  } catch (e) {
-    console.warn('[reg] regCredentials save:', e)
+  const credMap = { ...(cloud?.regCredentials || {}) }
+  credMap[phoneKey] = {
+    phone,
+    fullName: name,
+    tempPassword,
+    accountId: created.accountId,
   }
 
-  await setRegistrationRequestStatus(req.id, 'approved', `temp:${tempPassword}`)
+  const nextReqs = reqList.map((r) =>
+    r.id === req.id
+      ? { ...r, status: 'approved' as const, reviewed_at: new Date().toISOString(), note: `temp:${tempPassword}` }
+      : r,
+  )
+
+  // Parallel writes — no extra load+merge round-trips (lists already prepared)
+  await Promise.all([
+    saveSharedKey('accounts', listAccounts()),
+    saveSharedKey('students', nextStudents),
+    saveSharedKey('notices', nextNotices),
+    saveSharedKey('regCredentials', credMap),
+    saveRegRequests(nextReqs),
+  ])
+
   return { ok: true, tempPassword }
 }
 
@@ -280,7 +298,7 @@ export async function getApprovedCredentialsByPhone(
   if (key.length < 10) return null
 
   try {
-    const cloud = await loadSharedKeys(['regCredentials'])
+    const cloud = await withTimeout(loadSharedKeys(['regCredentials']), 4000)
     const hit = cloud?.regCredentials?.[key]
     if (hit?.tempPassword) {
       return { fullName: hit.fullName || '', phone: hit.phone || ph, tempPassword: hit.tempPassword }
@@ -289,10 +307,14 @@ export async function getApprovedCredentialsByPhone(
     console.warn('[reg] regCredentials load:', e)
   }
 
-  const list = await listRegistrationRequests()
-  const hit = list.find((r) => phoneKeyOf(r.phone) === key && r.status === 'approved')
-  if (!hit?.note?.startsWith('temp:')) return null
-  const tempPassword = hit.note.slice(5).trim()
-  if (!tempPassword) return null
-  return { fullName: hit.full_name, phone: ph, tempPassword }
+  try {
+    const list = await listRegistrationRequests()
+    const hit = list.find((r) => phoneKeyOf(r.phone) === key && r.status === 'approved')
+    if (!hit?.note?.startsWith('temp:')) return null
+    const tempPassword = hit.note.slice(5).trim()
+    if (!tempPassword) return null
+    return { fullName: hit.full_name, phone: ph, tempPassword }
+  } catch {
+    return null
+  }
 }
