@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, KeyRound, LogIn, UserPlus, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
-import { submitRegistrationRequest } from '@/lib/registration-requests'
+import { getApprovedCredentialsByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
 
 type Mode = 'login' | 'forgot' | 'request'
 
@@ -23,6 +23,8 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** Shown when this phone has an approved registration with a temp password */
+  const [approvedInfo, setApprovedInfo] = useState<{ phone: string; tempPassword: string } | null>(null)
 
   const errorText = (code: string) => {
     const map: Record<string, { ru: string; kk: string }> = {
@@ -45,6 +47,35 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
     setPassword('')
     setPassword2('')
   }
+
+  // After admin approves: show phone + temp password on login when this number is entered
+  useEffect(() => {
+    if (mode !== 'login' && mode !== 'forgot') {
+      setApprovedInfo(null)
+      return
+    }
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setApprovedInfo(null)
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      void getApprovedCredentialsByPhone(phone).then((cred) => {
+        if (cancelled) return
+        if (cred) {
+          setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
+          if (!password) setPassword(cred.tempPassword)
+        } else {
+          setApprovedInfo(null)
+        }
+      })
+    }, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [phone, mode])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -275,6 +306,29 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                 >
                   {tl({ ru: 'Забыли пароль?', kk: 'Құпия сөзді ұмыттыңыз ба?' })}
                 </button>
+              </div>
+            )}
+            {approvedInfo && mode === 'login' && (
+              <div className="rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-foreground" role="status">
+                <p className="font-semibold text-success">
+                  {tl({ ru: 'Заявка одобрена', kk: 'Өтініш мақұлданды' })}
+                </p>
+                <p className="mt-1">
+                  {tl({
+                    ru: `Ранее отправленная заявка с номером ${approvedInfo.phone} принята.`,
+                    kk: `${approvedInfo.phone} нөмірімен жіберілген өтініш қабылданды.`,
+                  })}
+                </p>
+                <p className="mt-1">
+                  {tl({ ru: 'Ваш временный пароль:', kk: 'Уақытша құпия сөзіңіз:' })}{' '}
+                  <code className="rounded bg-card px-1.5 py-0.5 font-bold tracking-wide">{approvedInfo.tempPassword}</code>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {tl({
+                    ru: 'Можете войти с этим паролем или нажать «Забыли пароль?» и задать свой.',
+                    kk: 'Осы құпия сөзбен кіруге немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қоюға болады.',
+                  })}
+                </p>
               </div>
             )}
             {error && (

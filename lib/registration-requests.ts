@@ -178,8 +178,8 @@ export async function approveRegistrationRequest(
     return { ok: true, tempPassword: '' }
   }
 
-  // Temporary password so the account exists; student should use "Забыли пароль?"
-  const tempPassword = `Emir${Math.floor(1000 + Math.random() * 9000)}`
+  // Unique temporary password per student (phone tail + random)
+  const tempPassword = `Emir${phone.replace(/\D/g, '').slice(-4)}${Math.floor(100 + Math.random() * 900)}`
 
   const { createAccountSilent } = await import('./auth')
   const created = await createAccountSilent(name, phone, tempPassword)
@@ -202,12 +202,47 @@ export async function approveRegistrationRequest(
   }
 
   // Append student to cloud students list
-  const { loadSharedKeys, saveStudentsLocalWins } = await import('./sync')
-  const cloud = await loadSharedKeys(['students'])
+  const { loadSharedKeys, saveStudentsLocalWins, saveNoticesMerged } = await import('./sync')
+  const cloud = await loadSharedKeys(['students', 'notices'])
   const remote = (cloud?.students || []) as Student[]
   const nextStudents = [...remote.filter((s) => s.id !== student.id && s.phone !== phone), student]
   await saveStudentsLocalWins(nextStudents)
 
-  await setRegistrationRequestStatus(req.id, 'approved')
+  // Targeted notice so student sees acceptance + phone + password after login
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const notice = {
+    id: `n_reg_${created.accountId}_${Date.now().toString(36)}`,
+    kind: 'info' as const,
+    title: {
+      ru: 'Заявка одобрена',
+      kk: 'Өтініш мақұлданды',
+    },
+    body: {
+      ru: `Ваша заявка с номером ${phone} принята. Временный пароль: ${tempPassword}. Войдите с этим паролем или нажмите «Забыли пароль?» и задайте свой.`,
+      kk: `${phone} нөмірімен жіберілген өтінішіңіз қабылданды. Уақытша құпия сөз: ${tempPassword}. Осы құпия сөзбен кіріңіз немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қойыңыз.`,
+    },
+    time: stamp,
+    read: false,
+    studentId: created.accountId,
+  }
+  const prevNotices = Array.isArray(cloud?.notices) ? cloud.notices : []
+  await saveNoticesMerged([notice, ...prevNotices.filter((n) => n.id !== notice.id)])
+
+  // Keep temp password on the request so login screen can show it by phone
+  await setRegistrationRequestStatus(req.id, 'approved', `temp:${tempPassword}`)
   return { ok: true, tempPassword }
+}
+
+/** Lookup approved registration by phone — returns temp password if still stored. */
+export async function getApprovedCredentialsByPhone(
+  phone: string,
+): Promise<{ fullName: string; phone: string; tempPassword: string } | null> {
+  const ph = normalizePhone(phone)
+  if (ph.length < 10) return null
+  const list = await listRegistrationRequests()
+  const hit = list.find((r) => normalizePhone(r.phone) === ph && r.status === 'approved')
+  if (!hit?.note?.startsWith('temp:')) return null
+  const tempPassword = hit.note.slice(5).trim()
+  if (!tempPassword) return null
+  return { fullName: hit.full_name, phone: ph, tempPassword }
 }
