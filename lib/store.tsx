@@ -17,7 +17,7 @@ import {
 import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
-  mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
+  mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS, HEAVY_KEYS,
   saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe, saveNoticesMerged, saveContentListSafe,
   type DeletedRecord,
 } from './sync'
@@ -216,23 +216,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
-    const tick = () => {
-      void loadMessagesBundle().then((bundle) => {
-        if (!bundle?.messages) return
-        const dropped = new Set(bundle.droppedMessageIds || [])
-        setMessages(bundle.messages.filter((m) => !dropped.has(m.id)))
-      })
-      void loadSharedKeys(['maintenanceMode']).then((c) => {
-        if (c && typeof c.maintenanceMode === 'boolean') setMaintenanceModeState(c.maintenanceMode)
-      })
-    }
-    const id = setInterval(tick, 8000)
-    return () => clearInterval(id)
-  }, [ready])
 
-  useEffect(() => {
-    if (!ready || !isSupabaseConfigured) return
-    const pull = async () => {
+    // Hot data only (no theory/questions) — less egress
+    const pullLive = async () => {
       const cloud = await loadSharedKeys(LIVE_KEYS)
       if (!cloud) return
       if (cloud.students?.length || cloud.deletedStudentIds?.length) {
@@ -255,24 +241,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setResults(cloud.results)
       }
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
+    }
+
+    // Heavy content rarely (theory, tickets, signs) — was the main egress leak
+    const pullHeavy = async () => {
+      const cloud = await loadSharedKeys(HEAVY_KEYS)
+      if (!cloud) return
       if (Array.isArray(cloud.instructors)) setInstructors(cloud.instructors)
-      if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory((prev) => ensureTheoryContent(cloud.theory!))
+      if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory(() => ensureTheoryContent(cloud.theory!))
       if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
       if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
+      if (cloud.school?.name) {
+        setSchoolState((prev) => ({
+          ...prev,
+          ...cloud.school!,
+          website: cloud.school!.website ?? prev.website,
+          instagram: cloud.school!.instagram ?? prev.instagram,
+        }))
+      }
     }
-    const id = setInterval(pull, 15000)
 
+    void pullLive()
+    void pullHeavy()
+
+    const liveId = setInterval(pullLive, 45_000) // was 8s+15s
+    const heavyId = setInterval(pullHeavy, 10 * 60_000) // 10 min
+
+    let rtTimer: ReturnType<typeof setTimeout> | null = null
     const unsub = subscribeAppState(LIVE_KEYS, () => {
-      void pull()
+      // debounce realtime storms (presence/messages)
+      if (rtTimer) clearTimeout(rtTimer)
+      rtTimer = setTimeout(() => { void pullLive() }, 2500)
     })
 
     return () => {
-      clearInterval(id)
+      clearInterval(liveId)
+      clearInterval(heavyId)
+      if (rtTimer) clearTimeout(rtTimer)
       unsub()
     }
   }, [ready])
+
 
   const me = useMemo(() => {
     const id = session?.accountId

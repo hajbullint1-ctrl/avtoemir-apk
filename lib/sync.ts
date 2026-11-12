@@ -367,10 +367,10 @@ function sanitizeStudentsForCloud(list: unknown): unknown {
     const s = raw as Student
     if (!s || typeof s !== 'object') return raw
     const docsIn = s.docs || ({} as Student['docs'])
+    // Never put base64 data-URLs in app_state — they explode egress on every poll
     const clean = (d: Student['docs'][keyof Student['docs']] | null | undefined) => {
       if (!d?.url) return null
-      if (d.url.startsWith('http')) return d
-      if (d.url.startsWith('data:') && d.url.length < 400_000) return d
+      if (d.url.startsWith('http://') || d.url.startsWith('https://')) return d
       return null
     }
     return {
@@ -385,10 +385,34 @@ function sanitizeStudentsForCloud(list: unknown): unknown {
   })
 }
 
+function stripDataUrlsDeep(value: unknown): unknown {
+  if (value == null) return value
+  if (typeof value === 'string') {
+    if (value.startsWith('data:') && value.length > 200) return null
+    return value
+  }
+  if (Array.isArray(value)) return value.map(stripDataUrlsDeep)
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if ((k === 'imageUrl' || k === 'url') && typeof v === 'string' && v.startsWith('data:')) {
+        out[k] = null
+        continue
+      }
+      out[k] = stripDataUrlsDeep(v)
+    }
+    return out
+  }
+  return value
+}
+
 export async function saveSharedKey(key: SharedKey, data: unknown): Promise<boolean> {
   const sb = getSupabase()
   if (!sb) return false
-  const payload = key === 'students' ? sanitizeStudentsForCloud(data) : data
+  let payload: unknown = key === 'students' ? sanitizeStudentsForCloud(data) : data
+  if (key === 'theory' || key === 'questions' || key === 'roadSigns' || key === 'messages') {
+    payload = stripDataUrlsDeep(payload)
+  }
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const { error } = await sb.from('app_state').upsert(
@@ -639,10 +663,16 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
   return result
 }
 
+/** Keys polled often (chat, students, flags). Keep small — no theory/questions. */
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
-  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds', 'deletedRecords',
-  'maintenanceMode', 'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'registrationRequests',
+  'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
+  'maintenanceMode', 'registrationRequests', 'regCredentials',
+]
+
+/** Heavy content — load once + rare refresh, never every 15s. */
+export const HEAVY_KEYS: SharedKey[] = [
+  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'deletedRecords', 'school',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
