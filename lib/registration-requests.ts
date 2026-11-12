@@ -61,52 +61,71 @@ export async function submitRegistrationRequest(input: {
   category?: string | null
   branch?: string | null
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const sb = getSupabase()
-  if (!sb || !isSupabaseConfigured) return { ok: false, error: 'no-cloud' }
+  if (!isSupabaseConfigured) return { ok: false, error: 'no-cloud' }
 
   const name = input.fullName.trim()
   const phone = normalizePhone(input.phone)
   if (name.length < 2) return { ok: false, error: 'name' }
   if (phone.length < 10) return { ok: false, error: 'phone' }
 
-  // Prevent duplicate pending for same phone
-  try {
-    const { data: existing } = await withTimeout(
-      sb.from('registration_requests').select('id').eq('phone', phone).eq('status', 'pending').limit(1),
-      8000,
-    )
-    if (existing && existing.length > 0) return { ok: false, error: 'exists' }
-  } catch (e) {
-    console.warn('[reg] duplicate check timeout:', e)
-    // continue anyway
-  }
+  const phoneKey = phone.replace(/\D/g, '').slice(-10)
 
-  const row = {
-    id: uid(),
-    full_name: name,
-    phone,
-    category: input.category || null,
-    branch: input.branch || null,
-    status: 'pending' as const,
-    created_at: new Date().toISOString(),
-  }
-
-  // Always write to app_state (reliable)
+  // Fast path: only app_state (table checks used to wait up to 8s+6s and freeze the button)
   try {
-    const prev = await loadRegRequests()
-    const next = [{ ...row, reviewed_at: null, note: null }, ...prev.filter((x) => x.id !== row.id && x.phone !== row.phone)]
-    const ok = await saveRegRequests(next)
+    const prev = await withTimeout(loadRegRequests(), 5000)
+    if (
+      prev.some(
+        (r) =>
+          r.status === 'pending' &&
+          (normalizePhone(r.phone) === phone || r.phone.replace(/\D/g, '').slice(-10) === phoneKey),
+      )
+    ) {
+      return { ok: false, error: 'exists' }
+    }
+
+    const row = {
+      id: uid(),
+      full_name: name,
+      phone,
+      category: input.category || null,
+      branch: input.branch || null,
+      status: 'pending' as const,
+      created_at: new Date().toISOString(),
+      reviewed_at: null as string | null,
+      note: null as string | null,
+    }
+
+    const next = [
+      row,
+      ...prev.filter(
+        (x) =>
+          x.id !== row.id &&
+          normalizePhone(x.phone) !== phone &&
+          x.phone.replace(/\D/g, '').slice(-10) !== phoneKey,
+      ),
+    ]
+    const ok = await withTimeout(saveRegRequests(next), 5000)
     if (!ok) return { ok: false, error: 'save' }
   } catch (e) {
     console.warn('[reg] submit app_state:', e)
     return { ok: false, error: 'save' }
   }
-  // Best-effort also write to table
-  try {
-    await withTimeout(sb.from('registration_requests').insert(row), 6000)
-  } catch (e) {
-    console.warn('[reg] table insert skipped:', e)
+
+  // Optional table write — never block UI
+  const sb = getSupabase()
+  if (sb) {
+    void Promise.resolve(
+      sb.from('registration_requests').insert({
+        full_name: name,
+        phone,
+        category: input.category || null,
+        branch: input.branch || null,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      }),
+    ).catch((e) => console.warn('[reg] table insert skipped:', e))
   }
+
   return { ok: true }
 }
 
