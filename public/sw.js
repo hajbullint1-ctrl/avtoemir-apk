@@ -1,5 +1,5 @@
 /* AvtoEmir Service Worker — network-first so app updates without APK rebuild */
-const CACHE = 'avtoemir-v3'
+const CACHE = 'avtoemir-v4'
 const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
 self.addEventListener('install', (event) => {
