@@ -512,59 +512,105 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         archivedAt: null,
       })),
     deleteStudent: (id) => {
+      if (!id || id === 'me' || id === 'guest' || id === 'guest_play_review') return
       const snapStudent = students.find((s) => s.id === id) || null
       const snapAccount = findAccountById(id)
+      const phone = (snapStudent?.phone || snapAccount?.phone || '').replace(/\D/g, '').slice(-10)
+      // Snapshot without heavy docs (keeps deletedRecords small)
+      const lightStudent = snapStudent
+        ? { ...snapStudent, docs: { idFront: null, idBack: null, psycho: null, narco: null } }
+        : null
       const record: DeletedRecord = {
         id,
         deletedAt: new Date().toISOString(),
-        student: snapStudent,
-        account: snapAccount || (snapStudent ? {
-          id: snapStudent.id,
-          fullName: snapStudent.name,
-          phone: snapStudent.phone,
-          passwordHash: '',
-          createdAt: new Date().toISOString(),
-        } : null),
+        student: lightStudent,
+        account: snapAccount
+          ? { ...snapAccount, passwordHash: snapAccount.passwordHash ? 'v2:deleted' : '' }
+          : (lightStudent
+              ? {
+                  id: lightStudent.id,
+                  fullName: lightStudent.name,
+                  phone: lightStudent.phone,
+                  passwordHash: '',
+                  createdAt: new Date().toISOString(),
+                }
+              : null),
       }
-      setDeletedRecords((prev) => {
-        const next = [record, ...prev.filter((r) => r.id !== id)].slice(0, 200)
-        void saveSharedKey('deletedRecords', next)
-        return next
-      })
+      setDeletedRecords((prev) => [record, ...prev.filter((r) => r.id !== id)].slice(0, 50))
       deleteAccount(id)
-      setStudents((list) => {
-        const next = list.filter((s) => s.id !== id && s.id !== 'me')
-        void saveSharedKey('students', next)
-        return next
-      })
-      setBookings((list) => {
-        const removed = list.filter((b) => b.studentId === id).map((b) => b.id)
-        const next = list.filter((b) => b.studentId !== id)
-        void saveBookingsMerged(next, removed).then((merged) => { if (merged) setBookings(merged) })
-        return next
-      })
-      setResults((list) => {
-        const next = list.filter((r) => r.studentId !== id)
-        void forceSaveResults(next)
-        return next
-      })
-      setMessages((list) => {
-        const removed = list.filter((m) => m.studentId === id).map((m) => m.id)
-        const next = list.filter((m) => m.studentId !== id)
-        void saveMessagesMerged(next, removed)
-        return next
-      })
+      setStudents((list) => list.filter((s) => s.id !== id && s.id !== 'me'))
+      setBookings((list) => list.filter((b) => b.studentId !== id))
+      setResults((list) => list.filter((r) => r.studentId !== id))
+      setMessages((list) => list.filter((m) => m.studentId !== id))
       setTheoryProgress((prev) => {
         if (!prev[id]) return prev
-        const { [id]: _drop, ...rest } = prev
+        const { [id]: _d, ...rest } = prev
         return rest
       })
-      const accountsNext = listAccounts().filter((a) => a.id !== id)
-      void saveSharedKey('accounts', accountsNext)
+      setLearnedSigns((prev) => {
+        if (!prev[id]) return prev
+        const { [id]: _d, ...rest } = prev
+        return rest
+      })
+      setPresence((prev) => {
+        if (!prev[id]) return prev
+        const { [id]: _d, ...rest } = prev
+        return rest
+      })
+
       void (async () => {
-        const bundle = await saveDeletedBundle({ addIds: [id], addRecords: [record] })
-        if (bundle.ok) setDeletedRecords(bundle.records)
-        else console.warn('[store] saveDeletedBundle deleteStudent failed for', id)
+        try {
+          const cloud = await loadSharedKeys([
+            'students', 'accounts', 'bookings', 'results', 'messages', 'droppedMessageIds',
+            'theoryProgress', 'learnedSigns', 'presence', 'studentMistakes', 'regCredentials',
+            'registrationRequests', 'notices',
+          ])
+          const nextStudents = (cloud?.students || students)
+            .filter((s) => s.id !== id && s.id !== 'me')
+          const nextAccounts = listAccounts().filter((a) => a.id !== id)
+          const nextBookings = (cloud?.bookings || []).filter((b) => b.studentId !== id)
+          const nextResults = (cloud?.results || []).filter((r) => r.studentId !== id)
+          const nextMessages = (cloud?.messages || []).filter((m) => m.studentId !== id)
+          const dropped = [...new Set([...(cloud?.droppedMessageIds || []), ...((cloud?.messages || []).filter((m) => m.studentId === id).map((m) => m.id))])]
+          const tp = { ...(cloud?.theoryProgress || {}) }
+          delete tp[id]
+          const ls = { ...(cloud?.learnedSigns || {}) }
+          delete ls[id]
+          const pr = { ...(cloud?.presence || {}) }
+          delete pr[id]
+          const sm = { ...(cloud?.studentMistakes || {}) }
+          delete sm[id]
+          const cred = { ...(cloud?.regCredentials || {}) }
+          if (phone) delete cred[phone]
+          const regs = (cloud?.registrationRequests || []).filter(
+            (r) => (r.phone || '').replace(/\D/g, '').slice(-10) !== phone,
+          )
+          // Drop personal notices for this student
+          const notices = (cloud?.notices || []).filter((n) => n.studentId !== id)
+
+          await Promise.all([
+            saveSharedKey('students', nextStudents),
+            saveSharedKey('accounts', nextAccounts),
+            saveSharedKey('bookings', nextBookings),
+            forceSaveResults(nextResults),
+            saveMessagesMerged(nextMessages, (cloud?.messages || []).filter((m) => m.studentId === id).map((m) => m.id)),
+            saveSharedKey('theoryProgress', tp),
+            saveSharedKey('learnedSigns', ls),
+            saveSharedKey('presence', pr),
+            saveSharedKey('studentMistakes', sm),
+            saveSharedKey('regCredentials', cred),
+            saveSharedKey('registrationRequests', regs),
+            saveSharedKey('notices', notices),
+          ])
+          const bundle = await saveDeletedBundle({ addIds: [id], addRecords: [record] })
+          if (bundle.ok) setDeletedRecords(bundle.records.slice(0, 50))
+          setStudents(nextStudents)
+          setBookings(nextBookings)
+          setResults(nextResults)
+          setMessages(nextMessages)
+        } catch (e) {
+          console.warn('[store] deleteStudent cloud purge:', e)
+        }
       })()
     },
     purgeApprovedStudents: () => {

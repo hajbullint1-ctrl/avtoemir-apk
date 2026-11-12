@@ -457,7 +457,7 @@ export async function saveDeletedBundle(opts: {
     for (const id of opts.removeIds || []) map.delete(id)
     records = [...map.values()]
       .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''))
-      .slice(0, 200)
+      .slice(0, 50)
   }
 
   for (const r of records) if (r?.id) del.add(r.id)
