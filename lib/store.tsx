@@ -264,21 +264,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     void pullLive()
+    // Theory/questions/signs: once per app open (not on a timer) — biggest egress win
     void pullHeavy()
 
-    const liveId = setInterval(pullLive, 45_000) // was 8s+15s
-    const heavyId = setInterval(pullHeavy, 10 * 60_000) // 10 min
+    const liveId = setInterval(pullLive, 60_000)
 
     let rtTimer: ReturnType<typeof setTimeout> | null = null
-    const unsub = subscribeAppState(LIVE_KEYS, () => {
-      // debounce realtime storms (presence/messages)
-      if (rtTimer) clearTimeout(rtTimer)
-      rtTimer = setTimeout(() => { void pullLive() }, 2500)
-    })
+    const unsub = subscribeAppState(
+      ['messages', 'notices', 'students', 'bookings', 'maintenanceMode', 'registrationRequests'],
+      () => {
+        if (rtTimer) clearTimeout(rtTimer)
+        rtTimer = setTimeout(() => { void pullLive() }, 3000)
+      },
+    )
 
     return () => {
       clearInterval(liveId)
-      clearInterval(heavyId)
       if (rtTimer) clearTimeout(rtTimer)
       unsub()
     }
