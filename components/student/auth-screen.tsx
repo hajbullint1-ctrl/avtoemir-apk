@@ -48,7 +48,24 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
     setPassword2('')
   }
 
-  // After admin approves: show phone + temp password on login when this number is entered
+  const checkApproved = async () => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setApprovedInfo(null)
+      return false
+    }
+    const cred = await getApprovedCredentialsByPhone(phone)
+    if (cred) {
+      setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
+      setPassword(cred.tempPassword)
+      setError(null)
+      return true
+    }
+    setApprovedInfo(null)
+    return false
+  }
+
+  // After admin approves: show phone + temp password when this number is entered
   useEffect(() => {
     if (mode !== 'login' && mode !== 'forgot') {
       setApprovedInfo(null)
@@ -60,21 +77,16 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       return
     }
     let cancelled = false
-    const t = setTimeout(() => {
-      void getApprovedCredentialsByPhone(phone).then((cred) => {
+    const timer = setTimeout(() => {
+      void checkApproved().then(() => {
         if (cancelled) return
-        if (cred) {
-          setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
-          if (!password) setPassword(cred.tempPassword)
-        } else {
-          setApprovedInfo(null)
-        }
       })
-    }, 500)
+    }, 400)
     return () => {
       cancelled = true
-      clearTimeout(t)
+      clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone, mode])
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -298,7 +310,28 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
               </label>
             )}
             {mode === 'login' && (
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                  onClick={() => {
+                    void (async () => {
+                      setBusy(true)
+                      const ok = await checkApproved()
+                      setBusy(false)
+                      if (!ok) {
+                        setError(
+                          tl({
+                            ru: 'Заявка ещё не одобрена или номер не найден. Проверьте номер.',
+                            kk: 'Өтініш әлі мақұлданбаған немесе нөмір табылмады. Нөмірді тексеріңіз.',
+                          }),
+                        )
+                      }
+                    })()
+                  }}
+                >
+                  {tl({ ru: 'Проверить статус заявки', kk: 'Өтініш статусын тексеру' })}
+                </button>
                 <button
                   type="button"
                   className="text-xs font-semibold text-primary underline-offset-2 hover:underline"

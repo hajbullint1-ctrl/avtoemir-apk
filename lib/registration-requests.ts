@@ -228,9 +228,28 @@ export async function approveRegistrationRequest(
   const prevNotices = Array.isArray(cloud?.notices) ? cloud.notices : []
   await saveNoticesMerged([notice, ...prevNotices.filter((n) => n.id !== notice.id)])
 
-  // Keep temp password on the request so login screen can show it by phone
+  // Dedicated cloud map so login screen always finds password by phone
+  const phoneKey = phone.replace(/\D/g, '').slice(-10)
+  try {
+    const credCloud = await loadSharedKeys(['regCredentials'])
+    const map = { ...(credCloud?.regCredentials || {}) }
+    map[phoneKey] = {
+      phone,
+      fullName: name,
+      tempPassword,
+      accountId: created.accountId,
+    }
+    await saveSharedKey('regCredentials', map)
+  } catch (e) {
+    console.warn('[reg] regCredentials save:', e)
+  }
+
   await setRegistrationRequestStatus(req.id, 'approved', `temp:${tempPassword}`)
   return { ok: true, tempPassword }
+}
+
+function phoneKeyOf(phone: string) {
+  return normalizePhone(phone).replace(/\D/g, '').slice(-10)
 }
 
 /** Lookup approved registration by phone — returns temp password if still stored. */
@@ -238,9 +257,21 @@ export async function getApprovedCredentialsByPhone(
   phone: string,
 ): Promise<{ fullName: string; phone: string; tempPassword: string } | null> {
   const ph = normalizePhone(phone)
-  if (ph.length < 10) return null
+  const key = phoneKeyOf(ph)
+  if (key.length < 10) return null
+
+  try {
+    const cloud = await loadSharedKeys(['regCredentials'])
+    const hit = cloud?.regCredentials?.[key]
+    if (hit?.tempPassword) {
+      return { fullName: hit.fullName || '', phone: hit.phone || ph, tempPassword: hit.tempPassword }
+    }
+  } catch (e) {
+    console.warn('[reg] regCredentials load:', e)
+  }
+
   const list = await listRegistrationRequests()
-  const hit = list.find((r) => normalizePhone(r.phone) === ph && r.status === 'approved')
+  const hit = list.find((r) => phoneKeyOf(r.phone) === key && r.status === 'approved')
   if (!hit?.note?.startsWith('temp:')) return null
   const tempPassword = hit.note.slice(5).trim()
   if (!tempPassword) return null

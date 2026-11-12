@@ -245,8 +245,28 @@ export async function loginAccount(
   password: string,
 ): Promise<{ ok: true; session: Session } | { ok: false; error: string }> {
   const ph = normalizePhone(phone)
-  const accounts = loadAccounts()
-  const account = accounts.find((a) => a.phone === ph)
+  const phoneKey = ph.replace(/\D/g, '').slice(-10)
+  let accounts = loadAccounts()
+  let account =
+    accounts.find((a) => a.phone === ph) ||
+    accounts.find((a) => a.phone.replace(/\D/g, '').slice(-10) === phoneKey)
+
+  if (!account) {
+    try {
+      const { loadSharedKeys } = await import('./sync')
+      const cloud = await loadSharedKeys(['accounts'])
+      if (cloud?.accounts?.length) {
+        mergeAccountsFromCloud(cloud.accounts)
+        accounts = loadAccounts()
+        account =
+          accounts.find((a) => a.phone === ph) ||
+          accounts.find((a) => a.phone.replace(/\D/g, '').slice(-10) === phoneKey)
+      }
+    } catch (e) {
+      console.warn('[auth] cloud accounts on login:', e)
+    }
+  }
+
   if (!account) return { ok: false, error: 'notfound' }
   const ok = await verifyPassword(password.trim(), account.passwordHash, account.id)
   if (!ok) return { ok: false, error: 'password' }

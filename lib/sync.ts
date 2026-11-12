@@ -35,6 +35,8 @@ export type SharedSlice = {
   /** Full snapshots for restore in admin */
   deletedRecords?: DeletedRecord[]
   registrationRequests?: import("./registration-requests").RegistrationRequest[]
+  /** phone digits -> temp login after admin approve */
+  regCredentials?: Record<string, { phone: string; fullName: string; tempPassword: string; accountId: string }>
   maintenanceMode?: boolean
 }
 
@@ -49,7 +51,7 @@ const KEYS = [
   'school', 'instructors', 'notices', 'students', 'theory', 'questions', 'reviews',
   'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
   'theoryProgress', 'roadSigns', 'presence', 'droppedMessageIds', 'studentMistakes',
-  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode', 'registrationRequests',
+  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode', 'registrationRequests', 'regCredentials',
 ] as const
 
 export type SharedKey = (typeof KEYS)[number]
@@ -295,6 +297,11 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
       break
     case 'registrationRequests':
       if (Array.isArray(d)) out.registrationRequests = d as import('./registration-requests').RegistrationRequest[]
+      break
+    case 'regCredentials':
+      if (d && typeof d === 'object' && !Array.isArray(d)) {
+        out.regCredentials = d as NonNullable<SharedSlice['regCredentials']>
+      }
       break
     case 'maintenanceMode':
       out.maintenanceMode = Boolean(d === true || (d && typeof d === 'object' && (d as { enabled?: boolean }).enabled === true))
