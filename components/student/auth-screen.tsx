@@ -60,8 +60,9 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       return false
     }
     const cred = await getApprovedCredentialsByPhone(phone)
-    if (cred?.tempPassword || cred) {
-      setApprovedInfo({ phone: cred.phone, tempPassword: '' })
+    if (cred?.tempPassword) {
+      setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
+      setPassword(cred.tempPassword)
       setError(null)
       return true
     }
@@ -357,10 +358,14 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                     kk: `${approvedInfo.phone} нөмірімен өтініш қабылданды.`,
                   })}
                 </p>
+                <p className="mt-1">
+                  {tl({ ru: 'Ваш временный пароль:', kk: 'Уақытша құпия сөзіңіз:' })}{' '}
+                  <code className="rounded bg-card px-1.5 py-0.5 font-bold tracking-wide">{approvedInfo.tempPassword}</code>
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {tl({
-                    ru: 'Заявка принята. Введите пароль, который вам сообщили, и нажмите «Войти».',
-                    kk: 'Өтініш қабылданды. Сізге айтқан құпия сөзді енгізіп, «Кіру» басыңыз.',
+                    ru: 'Можете войти с этим паролем или нажать «Забыли пароль?» и задать свой.',
+                    kk: 'Осы құпия сөзбен кіріңіз немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қойыңыз.',
                   })}
                 </p>
               </div>
