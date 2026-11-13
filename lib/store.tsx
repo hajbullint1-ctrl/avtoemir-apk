@@ -224,7 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud.students?.length || cloud.deletedStudentIds?.length) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
-      if (cloud.notices) setNotices((prev) => mergeById(prev, cloud.notices!))
+      if (Array.isArray(cloud.notices)) setNotices(cloud.notices)
       if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
       if (cloud.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
