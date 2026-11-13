@@ -504,7 +504,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!id || id === 'guest') return
       updateStudent(id, (s) => ({ ...s, status: 'pending' as const, submittedAt: nowStamp() }))
     },
-    approveStudent: (id, readyDate) => updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate })),
+    approveStudent: (id, readyDate) => {
+      updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate }))
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+      setNotices((list) => [
+        {
+          id: `n_cert_${id}_${Date.now().toString(36)}`,
+          kind: 'success' as const,
+          title: { ru: 'Документы подтверждены', kk: 'Құжаттар расталды' },
+          body: {
+            ru: `Ваши документы приняты. Сертификат будет готов ${readyDate}.`,
+            kk: `Құжаттарыңыз қабылданды. Сертификат ${readyDate} дайын болады.`,
+          },
+          time: stamp,
+          read: false,
+          studentId: id,
+        },
+        ...list,
+      ])
+    },
     rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected', readyDate: null })),
     resetStudentDocs: (id) =>
       updateStudent(id, (s) => ({
