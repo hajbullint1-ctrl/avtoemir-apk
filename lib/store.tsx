@@ -264,22 +264,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     void pullLive()
-    // Theory/questions/signs: once per app open (not on a timer) — biggest egress win
+    // Theory/questions/signs: once per app open (not on a timer)
     void pullHeavy()
 
-    const liveId = setInterval(pullLive, 60_000)
+    // Auto-refresh: every 90s when tab is visible
+    const liveId = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void pullLive()
+      }
+    }, 90_000)
 
+    // Also refresh when user returns to the tab
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void pullLive()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    // Realtime: pull after cloud changes (debounced)
     let rtTimer: ReturnType<typeof setTimeout> | null = null
     const unsub = subscribeAppState(
       ['messages', 'notices', 'students', 'bookings', 'maintenanceMode', 'registrationRequests'],
       () => {
         if (rtTimer) clearTimeout(rtTimer)
-        rtTimer = setTimeout(() => { void pullLive() }, 3000)
+        rtTimer = setTimeout(() => { void pullLive() }, 2000)
       },
     )
 
     return () => {
       clearInterval(liveId)
+      document.removeEventListener('visibilitychange', onVisible)
       if (rtTimer) clearTimeout(rtTimer)
       unsub()
     }
