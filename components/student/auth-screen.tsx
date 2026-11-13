@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
-import { getApprovedCredentialsByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
+import { isRegistrationApprovedByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
 
 type Mode = 'login' | 'forgot' | 'request'
 
@@ -24,7 +24,7 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
   const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   /** Shown when this phone has an approved registration with a temp password */
-  const [approvedInfo, setApprovedInfo] = useState<{ phone: string; tempPassword: string } | null>(null)
+  const [approvedInfo, setApprovedInfo] = useState<{ phone: string } | null>(null)
 
   const errorText = (code: string) => {
     const map: Record<string, { ru: string; kk: string }> = {
@@ -54,11 +54,10 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       setApprovedInfo(null)
       return false
     }
-    // Show password on any device when this phone has an approved request
-    const cred = await getApprovedCredentialsByPhone(phone)
-    if (cred?.tempPassword) {
-      setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
-      setPassword(cred.tempPassword)
+    // Only show approval status — never the temporary password
+    const approved = await isRegistrationApprovedByPhone(phone)
+    if (approved) {
+      setApprovedInfo({ phone: approved.phone })
       setError(null)
       return true
     }
@@ -66,7 +65,7 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
     return false
   }
 
-  // After admin approves: show phone + temp password when this number is entered
+  // After admin approves: show status (without password) when this number is entered
   useEffect(() => {
     if (mode !== 'login' && mode !== 'forgot') {
       setApprovedInfo(null)
@@ -134,8 +133,8 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
         }
         setSuccess(
           tl({
-            ru: 'Заявка отправлена! Вход будет доступен после одобрения администратором. Затем на экране входа введите свой номер — появится пароль (или «Проверить статус заявки»). Тел.: 87083425171',
-            kk: 'Өтініш жіберілді! Кіру әкімші мақұлдағаннан кейін болады. Кіру экранында нөміріңізді енгізіңіз — құпия сөз шығады. Тел.: 87083425171',
+            ru: 'Заявка отправлена! Вход будет доступен после одобрения администратором. Затем на экране входа введите свой номер и нажмите «Проверить статус заявки» — появится кнопка «Задать пароль». Тел.: 87083425171',
+            kk: 'Өтініш жіберілді! Кіру әкімші мақұлдағаннан кейін болады. Кіру экранында нөміріңізді енгізіңіз және «Өтініш статусын тексеру» батырмасын басыңыз — «Құпия сөз қою» батырмасы шығады. Тел.: 87083425171',
           }),
         )
         setTimeout(() => switchMode('login'), 2500)
@@ -354,16 +353,19 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                     kk: `${approvedInfo.phone} нөмірімен өтініш қабылданды.`,
                   })}
                 </p>
-                <p className="mt-1">
-                  {tl({ ru: 'Ваш временный пароль:', kk: 'Уақытша құпия сөзіңіз:' })}{' '}
-                  <code className="rounded bg-card px-1.5 py-0.5 font-bold tracking-wide">{approvedInfo.tempPassword}</code>
-                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {tl({
-                    ru: 'Можете войти с этим паролем или нажать «Забыли пароль?» и задать свой.',
-                    kk: 'Осы құпия сөзбен кіріңіз немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қойыңыз.',
+                    ru: 'Задайте свой пароль для входа в приложение.',
+                    kk: 'Қосымшаға кіру үшін өз құпия сөзіңізді қойыңыз.',
                   })}
                 </p>
+                <button
+                  type="button"
+                  className="mt-2 text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                  onClick={() => switchMode('forgot')}
+                >
+                  {tl({ ru: 'Задать пароль', kk: 'Құпия сөз қою' })}
+                </button>
               </div>
             )}
             {error && (
@@ -453,3 +455,4 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
     </div>
   )
 }
+
