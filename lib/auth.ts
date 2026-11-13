@@ -267,6 +267,25 @@ export async function loginAccount(
     }
   }
 
+  // Fallback: approved request has credentials but account was not synced
+  if (!account) {
+    try {
+      const { getApprovedCredentialsByPhone } = await import('./registration-requests')
+      const cred = await getApprovedCredentialsByPhone(ph)
+      if (cred?.tempPassword && cred.tempPassword === password.trim()) {
+        const created = await createAccountSilent(cred.fullName || 'Ученик', ph, cred.tempPassword)
+        if (created.ok) {
+          const { saveSharedKey } = await import('./sync')
+          await saveSharedKey('accounts', loadAccounts())
+          accounts = loadAccounts()
+          account = accounts.find((a) => a.id === created.accountId) || null
+        }
+      }
+    } catch (e) {
+      console.warn('[auth] credential fallback:', e)
+    }
+  }
+
   if (!account) return { ok: false, error: 'notfound' }
   const ok = await verifyPassword(password.trim(), account.passwordHash, account.id)
   if (!ok) return { ok: false, error: 'password' }
