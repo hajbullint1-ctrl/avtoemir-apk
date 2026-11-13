@@ -69,68 +69,57 @@ export async function submitRegistrationRequest(input: {
   if (phone.length < 10) return { ok: false, error: 'phone' }
 
   const phoneKey = phone.replace(/\D/g, '').slice(-10)
-
-  // Fast path: only app_state (table checks used to wait up to 8s+6s and freeze the button)
-  try {
-    const prev = await withTimeout(loadRegRequests(), 8000).catch(() => [] as RegistrationRequest[])
-    if (
-      prev.some(
-        (r) =>
-          r.status === 'pending' &&
-          (normalizePhone(r.phone) === phone || r.phone.replace(/\D/g, '').slice(-10) === phoneKey),
-      )
-    ) {
-      return { ok: false, error: 'exists' }
-    }
-
-    const row = {
-      id: uid(),
-      full_name: name,
-      phone,
-      category: input.category || null,
-      branch: input.branch || null,
-      status: 'pending' as const,
-      created_at: new Date().toISOString(),
-      reviewed_at: null as string | null,
-      note: null as string | null,
-    }
-
-    const next = [
-      row,
-      ...prev.filter(
-        (x) =>
-          x.id !== row.id &&
-          normalizePhone(x.phone) !== phone &&
-          x.phone.replace(/\D/g, '').slice(-10) !== phoneKey,
-      ),
-    ]
-    let ok = await withTimeout(saveRegRequests(next), 8000)
-    if (!ok) {
-      console.warn('[reg] save failed, retry')
-      ok = await withTimeout(saveRegRequests(next), 8000).catch(() => false)
-      if (!ok) return { ok: false, error: 'save' }
-    }
-  } catch (e) {
-    console.warn('[reg] submit app_state:', e)
-    return { ok: false, error: 'save' }
+  const row = {
+    id: uid(),
+    full_name: name,
+    phone,
+    category: input.category || null,
+    branch: input.branch || null,
+    status: 'pending' as const,
+    created_at: new Date().toISOString(),
+    reviewed_at: null as string | null,
+    note: null as string | null,
   }
 
-  // Optional table write — never block UI
+  // 1) Try table first (more reliable after migration)
+  let tableOk = false
   const sb = getSupabase()
   if (sb) {
-    void Promise.resolve(
-      sb.from('registration_requests').insert({
-        full_name: name,
-        phone,
-        category: input.category || null,
-        branch: input.branch || null,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-      }),
-    ).catch((e) => console.warn('[reg] table insert skipped:', e))
+    try {
+      const { error } = await withTimeout(
+        sb.from('registration_requests').insert({
+          id: row.id,
+          full_name: row.full_name,
+          phone: row.phone,
+          category: row.category,
+          branch: row.branch,
+          status: row.status,
+          created_at: row.created_at,
+        }),
+        8000,
+      )
+      if (!error) tableOk = true
+      else console.warn('[reg] table insert:', error.message)
+    } catch (e) {
+      console.warn('[reg] table insert exception:', e)
+    }
   }
 
-  return { ok: true }
+  // 2) Also try app_state (for admin list)
+  let stateOk = false
+  try {
+    const prev = await withTimeout(loadRegRequests(), 6000).catch(() => [] as RegistrationRequest[])
+    if (prev.some((r) => r.status === 'pending' && (normalizePhone(r.phone) === phone || r.phone.replace(/\D/g, '').slice(-10) === phoneKey))) {
+      return { ok: false, error: 'exists' }
+    }
+    const next = [row, ...prev.filter((x) => x.id !== row.id && normalizePhone(x.phone) !== phone && x.phone.replace(/\D/g, '').slice(-10) !== phoneKey)]
+    stateOk = await withTimeout(saveRegRequests(next), 6000).catch(() => false)
+  } catch (e) {
+    console.warn('[reg] app_state:', e)
+  }
+
+  if (tableOk || stateOk) return { ok: true }
+  return { ok: false, error: 'save' }
 }
 
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
