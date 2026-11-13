@@ -318,11 +318,47 @@ export async function approveRegistrationRequest(
 }
 
 function phoneKeyOf(phone: string) {
-  const d = String(phone || '').replace(/\D/g, '')
-  return d.slice(-10)
+  return normalizePhone(phone).replace(/\D/g, '').slice(-10)
 }
 
 /** Lookup approved registration by phone — returns temp password if still stored. */
+/** Public status check — does NOT return the password (privacy). */
+export async function isRegistrationApprovedByPhone(
+  phone: string,
+): Promise<{ fullName: string; phone: string } | null> {
+  const ph = normalizePhone(phone)
+  const key = phoneKeyOf(ph)
+  if (key.length < 10) return null
+
+  try {
+    const cloud = await withTimeout(loadSharedKeys(['regCredentials', 'registrationRequests']), 5000)
+    if (cloud?.regCredentials?.[key]) {
+      return { fullName: cloud.regCredentials[key].fullName || '', phone: ph }
+    }
+    const list = Array.isArray(cloud?.registrationRequests) ? cloud.registrationRequests : []
+    const hit = list.find((r: { phone?: string; status?: string }) => phoneKeyOf(r.phone || '') === key && r.status === 'approved')
+    if (hit) return { fullName: hit.full_name || '', phone: ph }
+  } catch (e) {
+    console.warn('[reg] status check:', e)
+  }
+
+  const sb = getSupabase()
+  if (sb) {
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('registration_requests').select('full_name, phone, status').eq('status', 'approved').limit(100),
+        5000,
+      )
+      if (!error && Array.isArray(data)) {
+        for (const r of data as { full_name?: string; phone?: string; status?: string }[]) {
+          if (phoneKeyOf(r.phone || '') === key) return { fullName: r.full_name || '', phone: ph }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  return null
+}
+
 export async function getApprovedCredentialsByPhone(
   phone: string,
 ): Promise<{ fullName: string; phone: string; tempPassword: string } | null> {
