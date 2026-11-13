@@ -526,8 +526,10 @@ export async function saveSchoolMerged(local: School): Promise<School> {
 }
 
 export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]> {
-  const cloud = await loadSharedKeys(['students'])
-  const remote = (cloud?.students || []) as Student[]
+  const cloud = await loadSharedKeys(['students', 'deletedStudentIds'])
+  const ban = new Set(cloud?.deletedStudentIds || [])
+  const remote = ((cloud?.students || []) as Student[]).filter((s) => s?.id && !ban.has(s.id))
+  local = local.filter((s) => s?.id && !ban.has(s.id))
   const map = new Map<string, Student>()
   for (const s of remote) {
     if (s?.id) map.set(s.id, s)
@@ -641,7 +643,7 @@ export async function saveMergedById<T extends { id: string }>(key: SharedKey, l
 }
 
 export async function saveInstructorsSafe(local: Instructor[]): Promise<Instructor[]> {
-  return saveMergedById('instructors', local)
+  return saveContentListSafe('instructors', local)
 }
 
 export async function saveContentListSafe<T extends { id: string }>(key: SharedKey, local: T[]): Promise<T[]> {
@@ -693,7 +695,14 @@ export async function saveSharedToCloud(slice: SharedSlice): Promise<void> {
   if (slice.reviews) tasks.push(saveContentListSafe('reviews', slice.reviews))
   if (slice.messages) tasks.push(saveSharedKey('messages', slice.messages))
   if (slice.bookings) tasks.push(saveSharedKey('bookings', slice.bookings))
-  if (slice.accounts) tasks.push(saveSharedKey('accounts', slice.accounts))
+  if (slice.accounts) {
+    tasks.push((async () => {
+      const cloud = await loadSharedKeys(['deletedAccountIds'])
+      const ban = new Set(cloud?.deletedAccountIds || [])
+      const clean = (slice.accounts || []).filter((a) => a?.id && !ban.has(a.id))
+      await saveSharedKey('accounts', clean)
+    })())
+  }
   if (slice.recovery) tasks.push(saveSharedKey('recovery', slice.recovery))
   if (slice.learnedSigns) {
     tasks.push((async () => {
