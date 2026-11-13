@@ -498,11 +498,67 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const id = session?.accountId || me.id
       if (!id || id === 'guest') return
       updateStudent(id, (s) => ({ ...s, docs: { ...s.docs, [key]: file } }))
+      // Explicit confirmed save so admin sees the URL in Supabase
+      void (async () => {
+        try {
+          const { loadSharedKeys, saveSharedKey } = await import('./sync')
+          const cloud = await loadSharedKeys(['students'])
+          const remote = (cloud?.students || []) as Student[]
+          const stamp = new Date().toISOString()
+          const next = remote.map((x) =>
+            x.id === id ? { ...x, docs: { ...x.docs, [key]: file }, updatedAt: stamp } : x,
+          )
+          if (!next.some((x) => x.id === id)) {
+            next.push({
+              id,
+              name: session?.fullName || me.name || '',
+              phone: session?.phone || me.phone || '',
+              category: 'B',
+              docs: { idFront: null, idBack: null, psycho: null, narco: null, [key]: file },
+              status: 'draft',
+              readyDate: null,
+              submittedAt: null,
+              updatedAt: stamp,
+            } as Student)
+          }
+          await saveSharedKey('students', next)
+        } catch (e) {
+          console.warn('[store] setDoc cloud save:', e)
+        }
+      })()
     },
     submitDocs: () => {
       const id = session?.accountId || me.id
       if (!id || id === 'guest') return
       updateStudent(id, (s) => ({ ...s, status: 'pending' as const, submittedAt: nowStamp() }))
+      void (async () => {
+        try {
+          const { loadSharedKeys, saveSharedKey } = await import('./sync')
+          const cloud = await loadSharedKeys(['students'])
+          const remote = (cloud?.students || []) as Student[]
+          const stamp = new Date().toISOString()
+          const submittedAt = nowStamp()
+          const next = remote.map((x) =>
+            x.id === id ? { ...x, status: 'pending' as const, submittedAt, updatedAt: stamp } : x,
+          )
+          if (!next.some((x) => x.id === id)) {
+            next.push({
+              id,
+              name: session?.fullName || me.name || '',
+              phone: session?.phone || me.phone || '',
+              category: 'B',
+              docs: { idFront: null, idBack: null, psycho: null, narco: null },
+              status: 'pending',
+              readyDate: null,
+              submittedAt,
+              updatedAt: stamp,
+            } as Student)
+          }
+          await saveSharedKey('students', next)
+        } catch (e) {
+          console.warn('[store] submitDocs cloud save:', e)
+        }
+      })()
     },
     approveStudent: (id, readyDate) => {
       updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate }))
