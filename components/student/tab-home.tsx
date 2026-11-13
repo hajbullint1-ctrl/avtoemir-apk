@@ -230,8 +230,19 @@ export function TabHome() {
           </Button>
         ) : null}
         {me.status === 'approved' && me.readyDate ? (
-          <div className="mt-3">
-            <Countdown readyDate={me.readyDate} />
+          <div className="mt-3 rounded-xl border border-success/40 bg-success/10 p-3">
+            <p className="text-sm font-semibold text-success">
+              {tl({ ru: 'Документы подтверждены', kk: 'Құжаттар расталды' })}
+            </p>
+            <p className="mt-1 text-sm">
+              {tl({
+                ru: `Сертификат будет готов: ${me.readyDate}`,
+                kk: `Сертификат дайын болады: ${me.readyDate}`,
+              })}
+            </p>
+            <div className="mt-2">
+              <Countdown readyDate={me.readyDate} />
+            </div>
           </div>
         ) : null}
       </Section>
