@@ -367,10 +367,11 @@ function sanitizeStudentsForCloud(list: unknown): unknown {
     const s = raw as Student
     if (!s || typeof s !== 'object') return raw
     const docsIn = s.docs || ({} as Student['docs'])
-    // Never put base64 data-URLs in app_state — they explode egress on every poll
+    // Prefer http URLs. Allow small compressed data-URLs so a failed storage upload still reaches admin.
     const clean = (d: Student['docs'][keyof Student['docs']] | null | undefined) => {
       if (!d?.url) return null
       if (d.url.startsWith('http://') || d.url.startsWith('https://')) return d
+      if (d.url.startsWith('data:image/') && d.url.length < 120_000) return d
       return null
     }
     return {
