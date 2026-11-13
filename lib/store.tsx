@@ -237,6 +237,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const ban = new Set(cloud.deletedStudentIds)
         setStudents((prev) => prev.filter((s) => !ban.has(s.id)))
       }
+      if (Array.isArray(cloud.deletedRecords)) {
+        setDeletedRecords(cloud.deletedRecords)
+      }
       if (Array.isArray(cloud.results) && Date.now() > resultsIgnoreUntil.current) {
         setResults(cloud.results)
       }
