@@ -500,34 +500,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDoc: (key, file) => {
       const id = session?.accountId || me.id
       if (!id || id === 'guest') return
-      updateStudent(id, (s) => {
-        const next = { ...s, docs: { ...s.docs, [key]: file } }
-        void (async () => {
-          const { saveSharedKey, loadSharedKeys } = await import('./sync')
-          const cloud = await loadSharedKeys(['students'])
-          const remote = (cloud?.students || []) as typeof students
-          const merged = remote.map((x) => (x.id === id ? next : x))
-          if (!merged.some((x) => x.id === id)) merged.push(next)
-          await saveSharedKey('students', merged)
-        })()
-        return next
-      })
+      updateStudent(id, (s) => ({ ...s, docs: { ...s.docs, [key]: file } }))
     },
     submitDocs: () => {
       const id = session?.accountId || me.id
       if (!id || id === 'guest') return
-      updateStudent(id, (s) => {
-        const next = { ...s, status: 'pending' as const, submittedAt: nowStamp() }
-        void (async () => {
-          const { saveSharedKey, loadSharedKeys } = await import('./sync')
-          const cloud = await loadSharedKeys(['students'])
-          const remote = (cloud?.students || []) as typeof students
-          const merged = remote.map((x) => (x.id === id ? next : x))
-          if (!merged.some((x) => x.id === id)) merged.push(next)
-          await saveSharedKey('students', merged)
-        })()
-        return next
-      })
+      updateStudent(id, (s) => ({ ...s, status: 'pending' as const, submittedAt: nowStamp() }))
     },
     approveStudent: (id, readyDate) => {
       updateStudent(id, (s) => ({ ...s, status: 'approved', readyDate }))
