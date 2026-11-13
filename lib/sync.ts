@@ -161,7 +161,21 @@ export function mergeStudents(
 
       const tS = Date.parse(s.updatedAt || '') || 0
       const tP = Date.parse(prev.updatedAt || '') || 0
-      if (tS > tP && tS > 0) {
+      const resetS = isDocsReset(s)
+      const resetP = isDocsReset(prev)
+
+      // Admin reset (draft + no docs) must win over student's pending/docs when it is newer or equal
+      if (resetS && !resetP && tS >= tP) {
+        docs = { idFront: null, idBack: null, psycho: null, narco: null }
+        status = 'draft'
+        submittedAt = null
+        readyDate = null
+      } else if (resetP && !resetS && tP >= tS) {
+        docs = { idFront: null, idBack: null, psycho: null, narco: null }
+        status = 'draft'
+        submittedAt = null
+        readyDate = null
+      } else if (tS > tP && tS > 0) {
         docs = {
           idFront: s.docs?.idFront ?? null,
           idBack: s.docs?.idBack ?? null,
