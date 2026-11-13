@@ -184,5 +184,10 @@ export async function uploadStudentDocument(studentId: string, docKey: string, f
     }
   }
 
+  // Last resort: compressed data URL (kept under ~80KB so it survives cloud save)
+  try {
+    const dataUrl = await compressImage(file, 640, 0.45)
+    if (dataUrl.length < 120_000) return dataUrl
+  } catch { /* ignore */ }
   throw new Error('upload_failed')
 }
