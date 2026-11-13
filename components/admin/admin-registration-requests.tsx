@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Phone, User, X, ClipboardList } from 'lucide-react'
+import { Check, Phone, User, X, ClipboardList, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import {
@@ -111,7 +111,7 @@ export function AdminRegistrationRequests() {
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <ClipboardList className="size-5" aria-hidden="true" />
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold">
               {tl({ ru: 'Заявки на регистрацию', kk: 'Тіркелу өтініштері' })}
             </h2>
@@ -122,6 +122,17 @@ export function AdminRegistrationRequests() {
               })}
             </p>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1"
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+            {tl({ ru: 'Обновить', kk: 'Жаңарту' })}
+          </Button>
         </div>
 
         {info && (
