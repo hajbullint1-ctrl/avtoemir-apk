@@ -580,14 +580,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ])
     },
     rejectStudent: (id) => updateStudent(id, (s) => ({ ...s, status: 'rejected', readyDate: null })),
-    resetStudentDocs: (id) =>
+    resetStudentDocs: (id) => {
       updateStudent(id, (s) => ({
         ...s,
         docs: { idFront: null, idBack: null, psycho: null, narco: null },
         status: 'draft',
         submittedAt: null,
         readyDate: null,
-      })),
+      }))
+      // Force the cleared record into Supabase so the student device picks it up
+      void (async () => {
+        try {
+          const { loadSharedKeys, saveSharedKey } = await import('./sync')
+          const cloud = await loadSharedKeys(['students'])
+          const remote = (cloud?.students || []) as Student[]
+          const stamp = new Date().toISOString()
+          const target = students.find((x) => x.id === id)
+          const phoneKey = (target?.phone || '').replace(/\D/g, '').slice(-10)
+          const next = remote.map((x) => {
+            const xPhone = (x.phone || '').replace(/\D/g, '').slice(-10)
+            if (x.id === id || (phoneKey && xPhone === phoneKey)) {
+              return {
+                ...x,
+                docs: { idFront: null, idBack: null, psycho: null, narco: null },
+                status: 'draft' as const,
+                submittedAt: null,
+                readyDate: null,
+                updatedAt: stamp,
+              }
+            }
+            return x
+          })
+          await saveSharedKey('students', next)
+        } catch (e) {
+          console.warn('[store] resetStudentDocs cloud:', e)
+        }
+      })()
+    },
     archiveStudent: (id) =>
       updateStudent(id, (s) => ({
         ...s,
