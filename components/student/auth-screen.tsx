@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
-import { isRegistrationApprovedByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
+import { getApprovedCredentialsByPhone, isMyRequestPhone, submitRegistrationRequest } from '@/lib/registration-requests'
 
 type Mode = 'login' | 'forgot' | 'request'
 
@@ -54,10 +54,15 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       setApprovedInfo(null)
       return false
     }
-    // Only confirm approval — never reveal the password (anyone could type a number)
-    const hit = await isRegistrationApprovedByPhone(phone)
-    if (hit) {
-      setApprovedInfo({ phone: hit.phone, tempPassword: '' })
+    // Only THIS device (the one that submitted) can see the password
+    if (!isMyRequestPhone(phone)) {
+      setApprovedInfo(null)
+      return false
+    }
+    const cred = await getApprovedCredentialsByPhone(phone)
+    if (cred?.tempPassword) {
+      setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
+      setPassword(cred.tempPassword)
       setError(null)
       return true
     }
@@ -353,10 +358,14 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                     kk: `${approvedInfo.phone} нөмірімен өтініш қабылданды.`,
                   })}
                 </p>
+                <p className="mt-1">
+                  {tl({ ru: 'Ваш временный пароль:', kk: 'Уақытша құпия сөзіңіз:' })}{' '}
+                  <code className="rounded bg-card px-1.5 py-0.5 font-bold tracking-wide">{approvedInfo.tempPassword}</code>
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {tl({
-                    ru: 'Временный пароль не показывается здесь — его сообщит администратор. Тел.: 87083425171. Или нажмите «Забыли пароль?» после входа.',
-                    kk: 'Уақытша құпия сөз мұнда көрсетілмейді — оны әкімші хабарлайды. Тел.: 87083425171.',
+                    ru: 'Можете войти с этим паролем или нажать «Забыли пароль?» и задать свой.',
+                    kk: 'Осы құпия сөзбен кіріңіз немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қойыңыз.',
                   })}
                 </p>
               </div>
