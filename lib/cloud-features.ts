@@ -184,5 +184,5 @@ export async function uploadStudentDocument(studentId: string, docKey: string, f
     }
   }
 
-  return durableFileUrl(file)
+  throw new Error('upload_failed')
 }
