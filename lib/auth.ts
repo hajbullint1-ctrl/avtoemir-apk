@@ -392,8 +392,29 @@ export async function resetPasswordByPhone(
   const pw = newPassword.trim()
   if (ph.length < 10) return { ok: false, error: 'phone' }
   if (pw.length < 6) return { ok: false, error: 'password' }
-  const accounts = loadAccounts()
-  const idx = accounts.findIndex((a) => a.phone === ph)
+  const phoneKey = ph.replace(/\D/g, '').slice(-10)
+
+  let accounts = loadAccounts()
+  let idx = accounts.findIndex(
+    (a) => a.phone === ph || a.phone.replace(/\D/g, '').slice(-10) === phoneKey,
+  )
+
+  // Account may exist only in the cloud (created when admin approved the request)
+  if (idx < 0) {
+    try {
+      const cloud = await loadSharedKeys(['accounts'])
+      if (cloud?.accounts?.length) {
+        mergeAccountsFromCloud(cloud.accounts)
+        accounts = loadAccounts()
+        idx = accounts.findIndex(
+          (a) => a.phone === ph || a.phone.replace(/\D/g, '').slice(-10) === phoneKey,
+        )
+      }
+    } catch (e) {
+      console.warn('[auth] cloud accounts on reset:', e)
+    }
+  }
+
   if (idx < 0) return { ok: false, error: 'notfound' }
   accounts[idx] = {
     ...accounts[idx],
