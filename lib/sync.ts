@@ -163,14 +163,17 @@ export function mergeStudents(
       const tP = Date.parse(prev.updatedAt || '') || 0
       const resetS = isDocsReset(s)
       const resetP = isDocsReset(prev)
+      // Also treat as reset if same phone and one side is a clear empty draft
+      const samePhone = (s.phone || '').replace(/\D/g, '').slice(-10) === (prev.phone || '').replace(/\D/g, '').slice(-10)
+        && (s.phone || '').replace(/\D/g, '').length >= 10
 
-      // Admin reset (draft + no docs) must win over student's pending/docs when it is newer or equal
-      if (resetS && !resetP && tS >= tP) {
+      // Admin reset must clear the student even if IDs differ but phone matches
+      if ((resetS && !resetP && (tS >= tP || samePhone)) || (resetS && samePhone && tS >= tP - 60_000)) {
         docs = { idFront: null, idBack: null, psycho: null, narco: null }
         status = 'draft'
         submittedAt = null
         readyDate = null
-      } else if (resetP && !resetS && tP >= tS) {
+      } else if ((resetP && !resetS && (tP >= tS || samePhone)) || (resetP && samePhone && tP >= tS - 60_000)) {
         docs = { idFront: null, idBack: null, psycho: null, narco: null }
         status = 'draft'
         submittedAt = null
