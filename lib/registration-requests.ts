@@ -118,7 +118,10 @@ export async function submitRegistrationRequest(input: {
     console.warn('[reg] app_state:', e)
   }
 
-  if (tableOk || stateOk) return { ok: true }
+  if (tableOk || stateOk) {
+    rememberMyRequest(phone)
+    return { ok: true }
+  }
   return { ok: false, error: 'save' }
 }
 
@@ -315,6 +318,31 @@ export async function approveRegistrationRequest(
   }
 
   return { ok: true, tempPassword }
+}
+
+const LOCAL_REQ_KEY = 'avtoemir.myRegRequest.v1'
+
+/** Remember that THIS device submitted this phone (so only this device can see the password). */
+export function rememberMyRequest(phone: string) {
+  if (typeof window === 'undefined') return
+  try {
+    const key = phoneKeyOf(phone)
+    if (key.length < 10) return
+    localStorage.setItem(LOCAL_REQ_KEY, JSON.stringify({ phoneKey: key, at: Date.now() }))
+  } catch { /* ignore */ }
+}
+
+/** True only if this device submitted a request for this phone. */
+export function isMyRequestPhone(phone: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = localStorage.getItem(LOCAL_REQ_KEY)
+    if (!raw) return false
+    const saved = JSON.parse(raw) as { phoneKey?: string }
+    return saved?.phoneKey === phoneKeyOf(phone)
+  } catch {
+    return false
+  }
 }
 
 function phoneKeyOf(phone: string) {
