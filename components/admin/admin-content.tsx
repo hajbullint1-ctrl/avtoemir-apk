@@ -594,6 +594,38 @@ export function RoadSignsEditor() {
         </div>
         <BiInput label={tl({ ru: 'Название', kk: 'Атауы' })} value={draft.name || emptyL()} onChange={(name) => setDraft({ ...draft, name })} />
         <BiInput label={tl({ ru: 'Значение', kk: 'Мағынасы' })} value={draft.meaning || emptyL()} onChange={(meaning) => setDraft({ ...draft, meaning })} multiline />
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{tl({ ru: 'Фото знака', kk: 'Белгі фотосы' })}</span>
+          {draft.imageUrl ? (
+            <img src={draft.imageUrl} alt="" className="h-24 w-24 rounded-lg border object-contain" />
+          ) : null}
+          <input
+            type="file"
+            accept="image/*"
+            className="text-sm"
+            disabled={busy}
+            onChange={async (e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              setBusy(true)
+              try {
+                const { uploadTheoryCard } = await import('@/lib/cloud-features')
+                const url = await uploadTheoryCard(f)
+                setDraft((d) => ({ ...d, imageUrl: url }))
+              } catch {
+                /* ignore */
+              } finally {
+                setBusy(false)
+              }
+            }}
+          />
+          {draft.imageUrl ? (
+            <button type="button" className="self-start text-xs text-destructive underline" onClick={() => setDraft({ ...draft, imageUrl: null })}>
+              {tl({ ru: 'Убрать фото', kk: 'Фотоны алып тастау' })}
+            </button>
+          ) : null}
+        </div>
         <div className="flex gap-2">
           <Button type="button" onClick={save}>{tl({ ru: 'Сохранить', kk: 'Сақтау' })}</Button>
           {editingId && <Button type="button" variant="outline" onClick={cancel}>{tl({ ru: 'Отмена', kk: 'Болдырмау' })}</Button>}
