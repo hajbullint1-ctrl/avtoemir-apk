@@ -670,12 +670,13 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
   'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
+  'deletedRecords',
   'maintenanceMode', 'registrationRequests', 'regCredentials',
 ]
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'deletedRecords', 'school',
+  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'school',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
