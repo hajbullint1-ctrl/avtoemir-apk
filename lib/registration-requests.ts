@@ -123,13 +123,40 @@ export async function submitRegistrationRequest(input: {
 }
 
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
-  // Only app_state — never wait on the secondary table (was up to 8s)
-  try {
-    return await withTimeout(loadRegRequests(), 6000)
-  } catch (e) {
-    console.warn('[reg] list:', e)
-    return []
+  const fromState: RegistrationRequest[] = await loadRegRequests().catch(() => [])
+
+  // Also read from table (student may have saved only there)
+  let fromTable: RegistrationRequest[] = []
+  const sb = getSupabase()
+  if (sb) {
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('registration_requests').select('*').order('created_at', { ascending: false }).limit(100),
+        6000,
+      )
+      if (!error && Array.isArray(data)) {
+        fromTable = data.map((r: Record<string, unknown>) => ({
+          id: String(r.id || ''),
+          full_name: String(r.full_name || ''),
+          phone: String(r.phone || ''),
+          category: (r.category as string) || null,
+          branch: (r.branch as string) || null,
+          status: (r.status as RegistrationRequest['status']) || 'pending',
+          created_at: String(r.created_at || new Date().toISOString()),
+          reviewed_at: (r.reviewed_at as string) || null,
+          note: (r.note as string) || null,
+        }))
+      }
+    } catch (e) {
+      console.warn('[reg] table list:', e)
+    }
   }
+
+  // Merge, prefer state, add table-only rows
+  const byId = new Map<string, RegistrationRequest>()
+  for (const r of fromState) if (r.id) byId.set(r.id, r)
+  for (const r of fromTable) if (r.id && !byId.has(r.id)) byId.set(r.id, r)
+  return [...byId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
 }
 
 export async function setRegistrationRequestStatus(
