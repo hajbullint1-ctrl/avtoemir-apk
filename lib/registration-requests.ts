@@ -318,7 +318,8 @@ export async function approveRegistrationRequest(
 }
 
 function phoneKeyOf(phone: string) {
-  return normalizePhone(phone).replace(/\D/g, '').slice(-10)
+  const d = String(phone || '').replace(/\D/g, '')
+  return d.slice(-10)
 }
 
 /** Lookup approved registration by phone — returns temp password if still stored. */
