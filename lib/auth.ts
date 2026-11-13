@@ -415,7 +415,24 @@ export async function resetPasswordByPhone(
     }
   }
 
-  if (idx < 0) return { ok: false, error: 'notfound' }
+  // Still not found in accounts — try approved registration and create the account now
+  if (idx < 0) {
+    try {
+      const { isRegistrationApprovedByPhone } = await import('./registration-requests')
+      const approved = await isRegistrationApprovedByPhone(ph)
+      if (approved) {
+        const created = await createAccountSilent(approved.fullName || 'Ученик', ph, pw)
+        if (created.ok) {
+          void persistAccountsToCloud(loadAccounts())
+          return { ok: true }
+        }
+      }
+    } catch (e) {
+      console.warn('[auth] approved fallback on reset:', e)
+    }
+    return { ok: false, error: 'notfound' }
+  }
+
   accounts[idx] = {
     ...accounts[idx],
     passwordHash: await hashPasswordAsync(pw, accounts[idx].id),
