@@ -171,9 +171,10 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      download={name}
                       className="inline-flex h-9 items-center justify-center rounded-lg border bg-background text-xs font-semibold text-primary hover:bg-accent"
                     >
-                      {tl({ ru: 'Открыть', kk: 'Ашу' })}
+                      {tl({ ru: 'Скачать / открыть', kk: 'Жүктеу / ашу' })}
                     </a>
                   </div>
                 ) : (
