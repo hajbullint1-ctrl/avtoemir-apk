@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, ClipboardList,
+  ArrowLeft, Bell, BookOpen, Building2, CalendarCheck, Car, ClipboardCheck, ClipboardList, Trash2,
   Lock, Map, MessageSquare, MessageSquareText, Smartphone, Users, UserX, Signpost, Wrench,
 } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
@@ -17,6 +17,7 @@ import { AdminRoutes } from './admin-routes'
 import { InstructorsEditor, QuestionsEditor, ReviewsEditor, SchoolEditor, TheoryEditor, RoadSignsEditor } from './admin-content'
 import { AdminTestResults } from './admin-test-results'
 import { AdminRegistrationRequests } from './admin-registration-requests'
+import { AdminCleanup } from './admin-cleanup'
 import { useStore } from '@/lib/store'
 import { checkAdminPassword, hasAdminSession, setAdminSession } from '@/lib/auth'
 import type { L } from '@/lib/i18n'
@@ -39,6 +40,7 @@ const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JS
   { id: 'test-history', label: { ru: 'История тестов', kk: 'Тесттер тарихы' }, icon: ClipboardCheck, Comp: AdminTestResults },
   { id: 'instructors', label: { ru: 'Инструкторы', kk: 'Нұсқаушылар' }, icon: Car, Comp: InstructorsEditor },
   { id: 'reviews', label: { ru: 'Отзывы', kk: 'Пікірлер' }, icon: MessageSquareText, Comp: ReviewsEditor },
+  { id: 'cleanup', label: { ru: 'Очистка данных', kk: 'Деректерді тазалау' }, icon: Trash2, Comp: AdminCleanup },
 ]
 
 function AdminGate({ onUnlock }: { onUnlock: () => void }) {
