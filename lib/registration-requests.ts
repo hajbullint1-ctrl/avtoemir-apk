@@ -317,8 +317,9 @@ export async function getApprovedCredentialsByPhone(
   const key = phoneKeyOf(ph)
   if (key.length < 10) return null
 
+  // 1) regCredentials in app_state
   try {
-    const cloud = await withTimeout(loadSharedKeys(['regCredentials']), 4000)
+    const cloud = await withTimeout(loadSharedKeys(['regCredentials']), 5000)
     const hit = cloud?.regCredentials?.[key]
     if (hit?.tempPassword) {
       return { fullName: hit.fullName || '', phone: hit.phone || ph, tempPassword: hit.tempPassword }
@@ -327,14 +328,41 @@ export async function getApprovedCredentialsByPhone(
     console.warn('[reg] regCredentials load:', e)
   }
 
+  // 2) registrationRequests in app_state (note starts with temp:)
   try {
-    const list = await listRegistrationRequests()
-    const hit = list.find((r) => phoneKeyOf(r.phone) === key && r.status === 'approved')
-    if (!hit?.note?.startsWith('temp:')) return null
-    const tempPassword = hit.note.slice(5).trim()
-    if (!tempPassword) return null
-    return { fullName: hit.full_name, phone: ph, tempPassword }
-  } catch {
-    return null
+    const list = await loadRegRequests()
+    const hit = list.find((r) => phoneKeyOf(r.phone) === key && r.status === 'approved' && r.note?.startsWith('temp:'))
+    if (hit?.note) {
+      const tempPassword = hit.note.slice(5).trim()
+      if (tempPassword) return { fullName: hit.full_name, phone: ph, tempPassword }
+    }
+  } catch (e) {
+    console.warn('[reg] state list creds:', e)
   }
+
+  // 3) Table registration_requests
+  const sb = getSupabase()
+  if (sb) {
+    try {
+      const { data, error } = await withTimeout(
+        sb.from('registration_requests').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(50),
+        5000,
+      )
+      if (!error && Array.isArray(data)) {
+        for (const r of data as Record<string, unknown>[]) {
+          const rPhone = String(r.phone || '')
+          if (phoneKeyOf(rPhone) !== key) continue
+          const note = String(r.note || '')
+          if (note.startsWith('temp:')) {
+            const tempPassword = note.slice(5).trim()
+            if (tempPassword) return { fullName: String(r.full_name || ''), phone: ph, tempPassword }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[reg] table creds:', e)
+    }
+  }
+
+  return null
 }
