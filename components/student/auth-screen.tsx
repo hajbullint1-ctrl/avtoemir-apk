@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
-import { getApprovedCredentialsByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
+import { isRegistrationApprovedByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
 
 type Mode = 'login' | 'forgot' | 'request'
 
@@ -54,10 +54,10 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       setApprovedInfo(null)
       return false
     }
-    const cred = await getApprovedCredentialsByPhone(phone)
-    if (cred) {
-      setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
-      setPassword(cred.tempPassword)
+    // Only confirm approval — never reveal the password (anyone could type a number)
+    const hit = await isRegistrationApprovedByPhone(phone)
+    if (hit) {
+      setApprovedInfo({ phone: hit.phone, tempPassword: '' })
       setError(null)
       return true
     }
@@ -323,7 +323,7 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                       if (!ok) {
                         setError(
                           tl({
-                            ru: 'Заявка ещё не одобрена или пароль не найден. Если админ уже принял — попробуйте через минуту или нажмите «Забыли пароль?».',
+                            ru: 'Заявка ещё не одобрена или номер не найден. Проверьте номер.',
                             kk: 'Өтініш әлі мақұлданбаған немесе нөмір табылмады. Нөмірді тексеріңіз.',
                           }),
                         )
@@ -349,18 +349,14 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
                 </p>
                 <p className="mt-1">
                   {tl({
-                    ru: `Ранее отправленная заявка с номером ${approvedInfo.phone} принята.`,
-                    kk: `${approvedInfo.phone} нөмірімен жіберілген өтініш қабылданды.`,
+                    ru: `Заявка с номером ${approvedInfo.phone} принята.`,
+                    kk: `${approvedInfo.phone} нөмірімен өтініш қабылданды.`,
                   })}
-                </p>
-                <p className="mt-1">
-                  {tl({ ru: 'Ваш временный пароль:', kk: 'Уақытша құпия сөзіңіз:' })}{' '}
-                  <code className="rounded bg-card px-1.5 py-0.5 font-bold tracking-wide">{approvedInfo.tempPassword}</code>
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {tl({
-                    ru: 'Можете войти с этим паролем или нажать «Забыли пароль?» и задать свой.',
-                    kk: 'Осы құпия сөзбен кіруге немесе «Құпия сөзді ұмыттыңыз ба?» арқылы өз құпия сөзіңізді қоюға болады.',
+                    ru: 'Временный пароль не показывается здесь — его сообщит администратор. Тел.: 87083425171. Или нажмите «Забыли пароль?» после входа.',
+                    kk: 'Уақытша құпия сөз мұнда көрсетілмейді — оны әкімші хабарлайды. Тел.: 87083425171.',
                   })}
                 </p>
               </div>
