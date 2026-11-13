@@ -564,14 +564,25 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
       (tLocal === tPrev && tLocal > 0) ||
       (tLocal === 0 && tPrev === 0 && rankL >= rankR)
 
+    // Prefer whichever side has real documents; never let an empty local wipe cloud docs
+    const preferDocs = (a: Student['docs'] | undefined, b: Student['docs'] | undefined) => ({
+      idFront: preferDoc(a?.idFront, b?.idFront),
+      idBack: preferDoc(a?.idBack, b?.idBack),
+      psycho: preferDoc(a?.psycho, b?.psycho),
+      narco: preferDoc(a?.narco, b?.narco),
+    })
+    const bestStatus = (rankL >= rankR ? s.status : prev.status) as Student['status']
+    const bestSubmitted = s.submittedAt || prev.submittedAt
+    const bestReady = s.readyDate || prev.readyDate
+
     if (localWins) {
       map.set(s.id, {
         ...prev,
         ...s,
-        docs: s.docs ?? prev.docs,
-        status: s.status,
-        readyDate: s.readyDate ?? null,
-        submittedAt: s.submittedAt ?? null,
+        docs: preferDocs(s.docs, prev.docs),
+        status: bestStatus,
+        readyDate: bestReady,
+        submittedAt: bestSubmitted,
         updatedAt: s.updatedAt || (tLocal ? s.updatedAt : new Date().toISOString()),
         name: s.name || prev.name,
         phone: s.phone || prev.phone,
@@ -580,6 +591,10 @@ export async function saveStudentsLocalWins(local: Student[]): Promise<Student[]
     } else {
       map.set(s.id, {
         ...prev,
+        docs: preferDocs(prev.docs, s.docs),
+        status: bestStatus,
+        readyDate: bestReady,
+        submittedAt: bestSubmitted,
         name: prev.name || s.name,
         phone: prev.phone || s.phone,
         category: prev.category || s.category,
@@ -684,12 +699,13 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'presence', 'accounts',
   'recovery', 'bookings', 'results', 'deletedStudentIds', 'deletedAccountIds',
+  'deletedRecords',
   'maintenanceMode', 'registrationRequests', 'regCredentials',
 ]
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'school', 'deletedRecords',
+  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'school',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
