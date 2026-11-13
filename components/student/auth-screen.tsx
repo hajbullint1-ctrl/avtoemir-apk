@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { useStore } from '@/lib/store'
 import { resetPasswordByPhone } from '@/lib/auth'
-import { getApprovedCredentialsByPhone, isMyRequestPhone, submitRegistrationRequest } from '@/lib/registration-requests'
+import { getApprovedCredentialsByPhone, submitRegistrationRequest } from '@/lib/registration-requests'
 
 type Mode = 'login' | 'forgot' | 'request'
 
@@ -54,11 +54,7 @@ export function AuthScreen({ onGuest }: { onGuest?: () => void } = {}) {
       setApprovedInfo(null)
       return false
     }
-    // Only THIS device (the one that submitted) can see the password
-    if (!isMyRequestPhone(phone)) {
-      setApprovedInfo(null)
-      return false
-    }
+    // Show password on any device when this phone has an approved request
     const cred = await getApprovedCredentialsByPhone(phone)
     if (cred?.tempPassword) {
       setApprovedInfo({ phone: cred.phone, tempPassword: cred.tempPassword })
