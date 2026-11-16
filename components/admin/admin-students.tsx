@@ -178,7 +178,10 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
                     </a>
                   </div>
                 ) : (
-                  <div className="flex h-28 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">—</div>
+                  <div className="flex h-28 flex-col items-center justify-center gap-1 rounded-lg bg-muted px-2 text-center">
+                    <span className="text-2xl" aria-hidden="true">📎</span>
+                    <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">{name || '—'}</span>
+                  </div>
                 )}
               </div>
             )
@@ -417,30 +420,40 @@ export function AdminStudents() {
                     <StatusBadge status={s.status} />
                   )}
                 </button>
-                <button
+                <Button
                   type="button"
-                  title={tl({ ru: 'Удалить аккаунт', kk: 'Аккаунтты жою' })}
-                  className="flex items-center px-3 text-destructive hover:bg-destructive/10"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    confirmDelete(s)
-                  }}
+                  size="icon"
+                  variant="ghost"
+                  className="my-auto mr-1 shrink-0 text-destructive hover:bg-destructive/10"
+                  aria-label={tl({ ru: `Удалить ${s.name}`, kk: `${s.name} жою` })}
+                  onClick={() => confirmDelete(s)}
                 >
                   <Trash2 className="size-4" aria-hidden="true" />
-                </button>
+                </Button>
               </li>
             ))}
-            {list.length === 0 && <li className="p-4 text-sm text-muted-foreground">—</li>}
+            {list.length === 0 && (
+              <li className="p-6 text-center text-sm text-muted-foreground">
+                {tl({ ru: 'Нет студентов', kk: 'Студенттер жоқ' })}
+              </li>
+            )}
           </ul>
         </div>
-        <div className="rounded-2xl border bg-card p-4">
+        <div className="rounded-2xl border bg-card p-5">
           {selected ? (
             <StudentDetail student={selected.student} account={selected.account} />
           ) : (
-            <p className="text-sm text-muted-foreground">{tl({ ru: 'Выберите студента', kk: 'Студентті таңдаңыз' })}</p>
+            <p className="text-sm text-muted-foreground">
+              {tl({ ru: 'Выберите студента', kk: 'Студентті таңдаңыз' })}
+            </p>
           )}
         </div>
       </div>
+      {approvedCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {tl({ ru: `Подтверждённых: ${approvedCount}`, kk: `Расталған: ${approvedCount}` })}
+        </p>
+      )}
     </div>
   )
 }
