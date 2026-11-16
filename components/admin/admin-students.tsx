@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { KeyRound, Phone, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
-import { DOC_KEYS, type DocStatus, type Student } from '@/lib/data'
+import { type DocStatus, type Student } from '@/lib/data'
 import { adminResetPassword, listAccounts, type Account } from '@/lib/auth'
 import { OnlineBadge } from '@/components/shared/online-badge'
 import { cn } from '@/lib/utils'
@@ -96,9 +96,8 @@ function PasswordPanel({ accountId }: { accountId: string }) {
 }
 
 function StudentDetail({ student, account }: { student: Student; account: Account | null }) {
-  const { tl, approveStudent, rejectStudent, resetStudentDocs, archiveStudent, unarchiveStudent, deleteStudent, presence } = useStore()
+  const { tl, approveStudent, rejectStudent, archiveStudent, unarchiveStudent, deleteStudent, presence } = useStore()
   const [date, setDate] = useState(student.readyDate ?? '')
-  const uploaded = DOC_KEYS.filter((k) => student.docs[k])
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => setDate(student.readyDate ?? ''), [student.id, student.readyDate])
@@ -140,55 +139,6 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
 
       {account && <PasswordPanel accountId={account.id} />}
 
-      <div>
-        <h3 className="mb-3 font-semibold">
-          {tl({ ru: 'Документы', kk: 'Құжаттар' })} ({uploaded.length}/4)
-        </h3>
-        <div className="grid grid-cols-2 gap-3">
-          {DOC_KEYS.map((k) => {
-            const f = student.docs[k]
-            const url = f?.url || ''
-            const name = f?.name || k
-            const isImg = /^data:image\//i.test(url) || /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(url)
-            const isPdf = /\.pdf(\?|$)/i.test(url) || /\.pdf$/i.test(name) || url.includes('application/pdf')
-            return (
-              <div key={k} className="rounded-xl border bg-card p-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">{tl(docLabel[k])}</p>
-                {url ? (
-                  <div className="flex flex-col gap-2">
-                    {isImg ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
-                        <img src={url} alt={name} className="h-28 w-full rounded-lg object-cover" />
-                      </a>
-                    ) : (
-                      <div className="flex h-28 flex-col items-center justify-center gap-1 rounded-lg bg-muted px-2 text-center">
-                        <span className="text-2xl" aria-hidden="true">{isPdf ? '📄' : '📎'}</span>
-                        <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">{name}</span>
-                      </div>
-                    )}
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      download={name}
-                      className="inline-flex h-9 items-center justify-center rounded-lg border bg-background text-xs font-semibold text-primary hover:bg-accent"
-                    >
-                      {tl({ ru: 'Скачать / открыть', kk: 'Жүктеу / ашу' })}
-                    </a>
-                  </div>
-                ) : (
-                  <div className="flex h-28 flex-col items-center justify-center gap-1 rounded-lg bg-muted px-2 text-center">
-                    <span className="text-2xl" aria-hidden="true">📎</span>
-                    <span className="line-clamp-2 w-full text-[11px] text-muted-foreground">{name || '—'}</span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
@@ -211,20 +161,6 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
             onClick={() => rejectStudent(student.id)}
           >
             {tl({ ru: 'Отклонить', kk: 'Қабылдамау' })}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const ok = window.confirm(
-                tl({
-                  ru: 'Сбросить документы этого студента? Он сможет загрузить и отправить их ещё раз.',
-                  kk: 'Осы студенттің құжаттарын ысыру керек пе? Ол қайта жүктеп жібере алады.',
-                }),
-              )
-              if (ok) resetStudentDocs(student.id)
-            }}
-          >
-            {tl({ ru: 'Сбросить документы', kk: 'Құжаттарды ысыру' })}
           </Button>
           {student.archived ? (
             <Button variant="outline" onClick={() => unarchiveStudent(student.id)}>
