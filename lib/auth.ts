@@ -278,7 +278,7 @@ export async function loginAccount(
           const { saveSharedKey } = await import('./sync')
           await saveSharedKey('accounts', loadAccounts())
           accounts = loadAccounts()
-          account = accounts.find((a) => a.id === created.accountId) || null
+          account = accounts.find((a) => a.id === created.accountId)
         }
       }
     } catch (e) {
