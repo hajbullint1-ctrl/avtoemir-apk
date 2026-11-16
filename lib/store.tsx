@@ -451,13 +451,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     deleteMyAccount: () => {
       const id = session?.accountId
-      if (!id || id === 'guest' || id === 'guest_play_review') return { ok: false, error: 'notfound' }
-      const res = deleteAccount(id)
-      if (!res.ok) return res
+      if (!id || id === 'guest' || id === 'guest_play_review') return { ok: false as const, error: 'notfound' }
+      const ok = deleteAccount(id)
+      if (!ok) return { ok: false as const, error: 'notfound' }
       clearSession()
       setSession(null)
       setStudents((list) => list.filter((s) => s.id !== id))
-      return { ok: true }
+      return { ok: true as const }
     },
     lang,
     setLang,
@@ -546,7 +546,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
       const notice = {
         id: `n_cert_${id}_${Date.now().toString(36)}`,
-        kind: 'success' as const,
+        kind: 'docs' as const,
         title: { ru: 'Документы подтверждены', kk: 'Құжаттар расталды' },
         body: {
           ru: `Ваши документы приняты. Сертификат будет готов ${readyDate}.`,
@@ -676,7 +676,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const next = remote.filter((s) => s.id !== id)
           await saveSharedKey('students', next)
           const prevRec = Array.isArray(cloud?.deletedRecords) ? cloud.deletedRecords : []
-          await saveDeletedBundle([record, ...prevRec.filter((r) => r.id !== id)].slice(0, 200))
+          await saveDeletedBundle({ addRecords: [record], replaceRecords: [record, ...prevRec.filter((r) => r.id !== id)].slice(0, 200) })
         } catch (e) {
           console.warn('[store] deleteStudent cloud:', e)
         }
