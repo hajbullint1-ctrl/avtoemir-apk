@@ -11,7 +11,7 @@ function daysAgo(days: number) {
 }
 
 export function AdminCleanup() {
-  const { tl, messages, results, setMessages, setResults } = useStore()
+  const { tl, messages, results } = useStore()
   const [busy, setBusy] = useState(false)
   const [info, setInfo] = useState<string | null>(null)
 
@@ -62,11 +62,9 @@ export function AdminCleanup() {
 
       // Save
       if (removedMsg) {
-        setMessages(nextMessages)
         await saveSharedKey('messages', nextMessages)
       }
       if (removedRes) {
-        setResults(nextResults)
         await saveSharedKey('results', nextResults)
       }
       if (removedReq) {
