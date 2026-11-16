@@ -304,7 +304,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const me = useMemo(() => {
     const id = session?.accountId
     const found = students.find((s) => s.id === id)
-    if (found) return found
+    if (found) {
+      return {
+        ...found,
+        name: found.name || session?.fullName || '',
+        phone: found.phone || session?.phone || '',
+      }
+    }
     return {
       id: id || 'guest',
       name: session?.fullName || '',
@@ -401,7 +407,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         setSession(r.session)
         setStudents((list) => {
-          if (list.some((s) => s.id === r.session.accountId)) return list
+          const existing = list.find((s) => s.id === r.session.accountId)
+          if (existing) {
+            if (!existing.name || !existing.phone) {
+              return list.map((s) =>
+                s.id === r.session.accountId
+                  ? { ...s, name: s.name || r.session.fullName, phone: s.phone || r.session.phone }
+                  : s,
+              )
+            }
+            return list
+          }
           const student: Student = {
             id: r.session.accountId,
             name: r.session.fullName,
