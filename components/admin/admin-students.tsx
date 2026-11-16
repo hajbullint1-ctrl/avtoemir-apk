@@ -23,13 +23,6 @@ const statusCls: Record<DocStatus, string> = {
   rejected: 'bg-destructive/10 text-destructive',
 }
 
-const docLabel: Record<(typeof DOC_KEYS)[number], { ru: string; kk: string }> = {
-  idFront: { ru: 'Уд. личности (лицо)', kk: 'Жеке куәлік (бет)' },
-  idBack: { ru: 'Уд. личности (оборот)', kk: 'Жеке куәлік (сырт)' },
-  psycho: { ru: 'Психосправка', kk: 'Психоанықтама' },
-  narco: { ru: 'Наркосправка', kk: 'Наркоанықтама' },
-}
-
 export function StatusBadge({ status }: { status: DocStatus }) {
   const { tl } = useStore()
   return (
