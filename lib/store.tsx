@@ -755,23 +755,6 @@ deleteStudent: (id) => {
     }
   })()
 },
-      setDeletedRecords((prev) => [record, ...prev.filter((r) => r.id !== id)].slice(0, 200))
-      setStudents((list) => list.filter((s) => s.id !== id))
-      deleteAccount(id)
-      void (async () => {
-        try {
-          const { loadSharedKeys, saveSharedKey, saveDeletedBundle } = await import('./sync')
-          const cloud = await loadSharedKeys(['students', 'deletedRecords'])
-          const remote = (cloud?.students || []) as Student[]
-          const next = remote.filter((s) => s.id !== id)
-          await saveSharedKey('students', next)
-          const prevRec = Array.isArray(cloud?.deletedRecords) ? cloud.deletedRecords : []
-          await saveDeletedBundle({ addRecords: [record], replaceRecords: [record, ...prevRec.filter((r) => r.id !== id)].slice(0, 200) })
-        } catch (e) {
-          console.warn('[store] deleteStudent cloud:', e)
-        }
-      })()
-    },
     purgeApprovedStudents: () => 0,
     deletedRecords,
     restoreDeletedAccount: (id) => {
