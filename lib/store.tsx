@@ -790,30 +790,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setMessages((list) => list.filter((m) => !(m.thread === thread && (!studentId || m.studentId === studentId))))
     },
     notices,
-    markNoticesRead: () => {
-      const id = session?.accountId
-      if (!id) return
-      setNotices((list) => list.map((n) => (n.studentId === id || !n.studentId ? { ...n, read: true } : n)))
-    },
-    dismissNotice: (id) => {
-      const meId = session?.accountId
-      if (!meId) return
-      setNotices((list) => list.map((n) => n.id === id ? { ...n, dismissedBy: [...(n.dismissedBy || []), meId] } : n))
-    },
-    broadcastNotice: (title, body) => {
-      const n: Notice = {
-        id: uid(),
-        kind: 'announce',
-        title,
-        body,
-        time: nowStamp(),
-        read: false,
+    // Внутри return useMemo(...) объекта Store
+markNoticesRead: () => {
+  const id = session?.accountId
+  if (!id) return
+  setNotices((list) => {
+    const next = list.map((n) =>
+      n.studentId === id || !n.studentId ? { ...n, read: true } : n,
+    )
+    void (async () => {
+      try {
+        const { saveNoticesMerged } = await import('./sync')
+        await saveNoticesMerged(next)
+      } catch (e) {
+        console.warn('[store] markNoticesRead cloud:', e)
       }
-      setNotices((list) => [n, ...list])
-    },
-    deleteNotice: (id) => {
-      setNotices((list) => list.filter((n) => n.id !== id))
-    },
+    })()
+    return next
+  })
+},
+
+dismissNotice: (noticeId) => {
+  const meId = session?.accountId
+  if (!meId) return
+  setNotices((list) => {
+    const next = list.map((n) =>
+      n.id === noticeId
+        ? { ...n, dismissedBy: [...(n.dismissedBy || []), meId] }
+        : n,
+    )
+    void (async () => {
+      try {
+        const { saveNoticesMerged } = await import('./sync')
+        await saveNoticesMerged(next)
+      } catch (e) {
+        console.warn('[store] dismissNotice cloud:', e)
+      }
+    })()
+    return next
+  })
+},
+    
+deleteNotice: (id) => {
+  setNotices((list) => {
+    const next = list.filter((n) => n.id !== id)
+    void (async () => {
+      try {
+        const { saveNoticesMerged } = await import('./sync')
+        await saveNoticesMerged(next, [id]) // removedIds
+      } catch (e) {
+        console.warn('[store] deleteNotice cloud:', e)
+      }
+    })()
+    return next
+  })
+},
     bookings,
     addBooking: (b) => {
       const item: Booking = { ...b, id: uid() }
