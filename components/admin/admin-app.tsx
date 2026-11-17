@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import { LangToggle } from '@/components/shared/lang-toggle'
 import { AdminStudents } from './admin-students'
-import { AdminDeletedAccounts } from './admin-deleted'
 import { AdminNotifications } from './admin-notifications'
 import { AdminMessages } from './admin-messages'
 import { AdminInstructorChat } from './admin-instructor-chat'
@@ -26,7 +25,6 @@ import { Button } from '@/components/ui/button'
 
 const sections: { id: string; label: L; icon: typeof Users; Comp: () => React.JSX.Element }[] = [
   { id: 'students', label: { ru: 'Студенты и документы', kk: 'Студенттер мен құжаттар' }, icon: Users, Comp: AdminStudents },
-  { id: 'deleted', label: { ru: 'Удалённые аккаунты', kk: 'Жойылған аккаунттар' }, icon: UserX, Comp: AdminDeletedAccounts },
   { id: 'reg-requests', label: { ru: 'Заявки на регистрацию', kk: 'Тіркелу өтініштері' }, icon: ClipboardList, Comp: AdminRegistrationRequests },
   { id: 'bookings', label: { ru: 'Записи на вождение', kk: 'Жүргізу жазбалары' }, icon: CalendarCheck, Comp: AdminBookings },
   { id: 'messages', label: { ru: 'Сообщения', kk: 'Хабарламалар' }, icon: MessageSquare, Comp: AdminMessages },
