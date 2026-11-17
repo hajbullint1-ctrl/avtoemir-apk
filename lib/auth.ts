@@ -113,6 +113,20 @@ function saveAccounts(list: Account[]) {
   onAccountsChanged?.(cleaned)
 }
 
+/** Deduplicate accounts by normalized phone, keep the newest / cloud-preferred. */
+function dedupeByPhone(list: Account[]): Account[] {
+  const byPhone = new Map<string, Account>()
+  for (const a of list) {
+    if (!a?.phone) continue
+    const ph = normalizePhone(a.phone)
+    const prev = byPhone.get(ph)
+    if (!prev || (a.createdAt || '') > (prev.createdAt || '')) {
+      byPhone.set(ph, { ...a, phone: ph })
+    }
+  }
+  return [...byPhone.values()]
+}
+
 export function mergeAccountsFromCloud(remote: Account[], deletedIds: string[] = []): Account[] {
   if (!Array.isArray(remote) || remote.length === 0) return loadAccounts()
   const ban = new Set(['me', ...deletedIds])
@@ -120,32 +134,37 @@ export function mergeAccountsFromCloud(remote: Account[], deletedIds: string[] =
   const localById = new Map(local.map((a) => [a.id, a]))
   const localByPhone = new Map(local.map((a) => [normalizePhone(a.phone), a]))
   const out: Account[] = []
-  const seen = new Set<string>()
+  const seenPhones = new Set<string>()
 
+  // Prefer cloud records first
   for (const r of remote) {
     if (!r?.id || ban.has(r.id)) continue
     const phone = normalizePhone(r.phone)
-    if (phone.replace(/\D/g, '') === '77015551234') continue
+    if (!phone || phone.replace(/\D/g, '') === '77015551234') continue
+    if (seenPhones.has(phone)) continue
     const existing = localById.get(r.id) ?? localByPhone.get(phone)
     const next: Account = {
       ...r,
       id: r.id,
-      phone: phone || existing?.phone || r.phone,
+      phone,
       passwordHash: r.passwordHash || existing?.passwordHash || '',
       fullName: r.fullName || existing?.fullName || '',
-      createdAt: existing?.createdAt || r.createdAt,
+      createdAt: r.createdAt || existing?.createdAt || new Date().toISOString(),
     }
     out.push(next)
-    seen.add(next.id)
+    seenPhones.add(phone)
   }
 
+  // Add local-only accounts that are not banned and not already seen by phone
   for (const a of local) {
-    if (!a?.id || ban.has(a.id) || seen.has(a.id)) continue
-    out.push(a)
-    seen.add(a.id)
+    if (!a?.id || ban.has(a.id)) continue
+    const phone = normalizePhone(a.phone)
+    if (seenPhones.has(phone)) continue
+    out.push({ ...a, phone })
+    seenPhones.add(phone)
   }
 
-  const cleaned = stripPlain(out)
+  const cleaned = dedupeByPhone(stripPlain(out))
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(cleaned))
   return cleaned
 }
@@ -192,6 +211,14 @@ export async function registerAccount(
   if (name.length < 2) return { ok: false, error: 'name' }
   if (ph.length < 10) return { ok: false, error: 'phone' }
   if (pw.length < 6) return { ok: false, error: 'password' }
+
+  // Always check cloud first
+  try {
+    const cloud = await loadSharedKeys(['accounts'])
+    if (cloud?.accounts?.length) {
+      mergeAccountsFromCloud(cloud.accounts)
+    }
+  } catch {}
 
   const accounts = loadAccounts()
   if (accounts.some((a) => a.phone === ph)) return { ok: false, error: 'exists' }
@@ -246,26 +273,22 @@ export async function loginAccount(
 ): Promise<{ ok: true; session: Session } | { ok: false; error: string }> {
   const ph = normalizePhone(phone)
   const phoneKey = ph.replace(/\D/g, '').slice(-10)
+
+  // Always pull latest from cloud first and overwrite local for this phone
+  try {
+    const { loadSharedKeys } = await import('./sync')
+    const cloud = await loadSharedKeys(['accounts'])
+    if (cloud?.accounts?.length) {
+      mergeAccountsFromCloud(cloud.accounts)
+    }
+  } catch (e) {
+    console.warn('[auth] cloud accounts on login:', e)
+  }
+
   let accounts = loadAccounts()
   let account =
     accounts.find((a) => a.phone === ph) ||
     accounts.find((a) => a.phone.replace(/\D/g, '').slice(-10) === phoneKey)
-
-  if (!account) {
-    try {
-      const { loadSharedKeys } = await import('./sync')
-      const cloud = await loadSharedKeys(['accounts'])
-      if (cloud?.accounts?.length) {
-        mergeAccountsFromCloud(cloud.accounts)
-        accounts = loadAccounts()
-        account =
-          accounts.find((a) => a.phone === ph) ||
-          accounts.find((a) => a.phone.replace(/\D/g, '').slice(-10) === phoneKey)
-      }
-    } catch (e) {
-      console.warn('[auth] cloud accounts on login:', e)
-    }
-  }
 
   // Fallback: approved request has credentials but account was not synced
   if (!account) {
@@ -351,7 +374,6 @@ export function getAccountPassword(_accountId: string): string | null {
   return null
 }
 
-
 async function persistAccountsToCloud(accounts: Account[]) {
   try {
     const cloud = await loadSharedKeys(['accounts'])
@@ -359,10 +381,10 @@ async function persistAccountsToCloud(accounts: Account[]) {
     const map = new Map<string, Account>()
     for (const a of remote) if (a?.id) map.set(a.id, a)
     for (const a of accounts) if (a?.id) map.set(a.id, a)
-    await saveSharedKey('accounts', [...map.values()])
+    await saveSharedKey('accounts', dedupeByPhone([...map.values()]))
   } catch (e) {
     console.warn('[auth] persist accounts:', e)
-    await saveSharedKey('accounts', accounts)
+    await saveSharedKey('accounts', dedupeByPhone(accounts))
   }
 }
 
@@ -399,7 +421,6 @@ export async function resetPasswordByPhone(
     (a) => a.phone === ph || a.phone.replace(/\D/g, '').slice(-10) === phoneKey,
   )
 
-  // Account may exist only in the cloud (created when admin approved the request)
   if (idx < 0) {
     try {
       const cloud = await loadSharedKeys(['accounts'])
@@ -415,7 +436,6 @@ export async function resetPasswordByPhone(
     }
   }
 
-  // Still not found in accounts — try approved registration and create the account now
   if (idx < 0) {
     try {
       const { isRegistrationApprovedByPhone } = await import('./registration-requests')
