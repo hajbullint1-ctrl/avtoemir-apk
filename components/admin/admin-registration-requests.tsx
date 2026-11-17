@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Phone, User, X, ClipboardList, RefreshCw } from 'lucide-react'
+import { Check, Phone, User, X, ClipboardList, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 import {
   listRegistrationRequests,
   approveRegistrationRequest,
   setRegistrationRequestStatus,
+  cleanProcessedRegistrationRequests,
   type RegistrationRequest,
 } from '@/lib/registration-requests'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,7 @@ export function AdminRegistrationRequests() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -52,7 +54,6 @@ export function AdminRegistrationRequests() {
     try {
       const res = await approveRegistrationRequest(r)
       if (res.ok) {
-        // Optimistic UI — no second full list fetch that feels laggy
         setItems((list) =>
           list.map((x) =>
             x.id === r.id
@@ -90,6 +91,25 @@ export function AdminRegistrationRequests() {
       await load()
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const onClean = async () => {
+    const ok = window.confirm(tl({
+      ru: 'Удалить все обработанные (одобренные и отклонённые) заявки из списка и Supabase? Новые заявки на те же номера смогут приходить с нуля.',
+      kk: 'Барлық өңделген (мақұлданған және қабылданбаған) өтініштерді тізім және Supabase-тен жою керек пе? Сол нөмірге жаңа өтініш келе алады.',
+    }))
+    if (!ok) return
+    setCleaning(true)
+    try {
+      const n = await cleanProcessedRegistrationRequests(true)
+      setInfo(tl({ ru: `Удалено обработанных заявок: ${n}`, kk: `Жойылды: ${n}` }))
+      await load()
+    } catch (e) {
+      console.warn(e)
+      setInfo(tl({ ru: 'Ошибка очистки', kk: 'Тазалау қатесі' }))
+    } finally {
+      setCleaning(false)
     }
   }
 
@@ -197,9 +217,21 @@ export function AdminRegistrationRequests() {
 
       {done.length > 0 && (
         <section className="rounded-2xl border bg-card p-5">
-          <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            {tl({ ru: 'Обработанные', kk: 'Өңделгендер' })}
-          </h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              {tl({ ru: 'Обработанные', kk: 'Өңделгендер' })}
+            </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 text-destructive"
+              disabled={cleaning}
+              onClick={onClean}
+            >
+              <Trash2 className="size-4" />
+              {cleaning ? tl({ ru: 'Очистка…', kk: 'Тазалануда…' }) : tl({ ru: 'Очистить обработанные', kk: 'Өңделгендерді тазалау' })}
+            </Button>
+          </div>
           <ul className="flex flex-col gap-2">
             {done.map((r) => (
               <li key={r.id} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm">
