@@ -664,23 +664,97 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         archived: false,
         archivedAt: null,
       })),
-    deleteStudent: (id) => {
-      if (!id || id === 'me' || id === 'guest' || id === 'guest_play_review') return
-      const snapStudent = students.find((s) => s.id === id) || null
-      const snapAccount = findAccountById(id)
-      const phone = (snapStudent?.phone || snapAccount?.phone || '').replace(/\D/g, '').slice(-10)
-      // Snapshot without heavy docs (keeps deletedRecords small)
-      const lightStudent = snapStudent
-        ? { ...snapStudent, docs: { idFront: null, idBack: null, psycho: null, narco: null } }
-        : null
-      const record: DeletedRecord = {
-        id,
-        deletedAt: new Date().toISOString(),
-        student: lightStudent,
-        account: snapAccount
-          ? { id: snapAccount.id, fullName: snapAccount.fullName, phone: snapAccount.phone, passwordHash: snapAccount.passwordHash, createdAt: snapAccount.createdAt }
-          : null,
-      }
+deleteStudent: (id) => {
+  if (!id || id === 'me' || id === 'guest' || id === 'guest_play_review') return
+
+  // Локальная очистка
+  setStudents((list) => list.filter((s) => s.id !== id))
+  setMessages((list) => list.filter((m) => m.studentId !== id))
+  setBookings((list) => list.filter((b) => b.studentId !== id))
+  setNotices((list) => list.filter((n) => n.studentId !== id))
+  setResults((list) => list.filter((r) => r.studentId !== id))
+  setDeletedRecords([]) // больше не используем снимки
+
+  // Удаление из localStorage аккаунтов
+  deleteAccount(id) // существующая функция из auth.ts
+
+  // Полная очистка в Supabase (все связанные ключи)
+  void (async () => {
+    try {
+      const {
+        loadSharedKeys,
+        saveSharedKey,
+        saveDeletedBundle,
+      } = await import('./sync')
+
+      const keys = [
+        'students',
+        'accounts',
+        'messages',
+        'bookings',
+        'notices',
+        'results',
+        'registrationRequests',
+        'profiles',
+        'theoryProgress',
+        'learnedSigns',
+        'studentMistakes',
+        'recovery',
+      ] as const
+
+      const cloud = await loadSharedKeys([...keys, 'deletedAccountIds', 'deletedStudentIds'])
+
+      const clean = (arr: any[] | undefined, idField = 'id') =>
+        (arr || []).filter((x) => x?.[idField] !== id && x?.studentId !== id && x?.accountId !== id)
+
+      await Promise.all([
+        saveSharedKey('students', clean(cloud?.students)),
+        saveSharedKey('accounts', clean(cloud?.accounts)),
+        saveSharedKey('messages', clean(cloud?.messages, 'studentId')),
+        saveSharedKey('bookings', clean(cloud?.bookings, 'studentId')),
+        saveSharedKey('notices', clean(cloud?.notices, 'studentId')),
+        saveSharedKey('results', clean(cloud?.results, 'studentId')),
+        saveSharedKey('registrationRequests', clean(cloud?.registrationRequests)),
+        saveSharedKey('profiles', clean(cloud?.profiles)),
+        // theoryProgress / learnedSigns / studentMistakes — объекты, чистим по ключу id
+        saveSharedKey('theoryProgress', (() => {
+          const obj = { ...(cloud?.theoryProgress || {}) }
+          delete obj[id]
+          return obj
+        })()),
+        saveSharedKey('learnedSigns', (() => {
+          const obj = { ...(cloud?.learnedSigns || {}) }
+          delete obj[id]
+          return obj
+        })()),
+        saveSharedKey('studentMistakes', (() => {
+          const obj = { ...(cloud?.studentMistakes || {}) }
+          delete obj[id]
+          return obj
+        })()),
+        saveSharedKey('recovery', clean(cloud?.recovery, 'accountId')),
+      ])
+
+      // Tombstone (только ID, без снимков) — чтобы другие устройства не вернули аккаунт из своего localStorage
+      await saveDeletedBundle({
+        addIds: [id],
+        removeRecordIds: [id],
+        replaceRecords: [], // больше не храним снимки
+      })
+
+      // Очистка localStorage на этом устройстве
+      try {
+        const accRaw = localStorage.getItem('avtoemir.accounts.v1')
+        if (accRaw) {
+          const acc = JSON.parse(accRaw).filter((a: any) => a.id !== id)
+          localStorage.setItem('avtoemir.accounts.v1', JSON.stringify(acc))
+        }
+      } catch {}
+    } catch (e) {
+      console.warn('[store] permanent deleteStudent:', e)
+    }
+  })()
+},
       setDeletedRecords((prev) => [record, ...prev.filter((r) => r.id !== id)].slice(0, 200))
       setStudents((list) => list.filter((s) => s.id !== id))
       deleteAccount(id)
