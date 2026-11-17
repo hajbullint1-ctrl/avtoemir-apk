@@ -3,6 +3,7 @@
  * Stored in Supabase table `registration_requests`.
  * On approve: creates an Account + Student so the person can log in
  * (via "Забыли пароль?" to set their password).
+ * Phone is unique — one number = one request / one account.
  */
 
 import { getSupabase, isSupabaseConfigured } from './supabase'
@@ -14,7 +15,6 @@ import {
 import { saveSharedKey, loadSharedKeys } from './sync'
 import type { Student, Category } from './data'
 
-
 function withTimeout<T>(promise: PromiseLike<T>, ms = 12000): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout')), ms)
@@ -24,7 +24,6 @@ function withTimeout<T>(promise: PromiseLike<T>, ms = 12000): Promise<T> {
     )
   })
 }
-
 
 async function loadRegRequests(): Promise<RegistrationRequest[]> {
   try {
@@ -69,6 +68,19 @@ export async function submitRegistrationRequest(input: {
   if (phone.length < 10) return { ok: false, error: 'phone' }
 
   const phoneKey = phone.replace(/\D/g, '').slice(-10)
+
+  // Check existing account
+  try {
+    const cloud = await loadSharedKeys(['accounts'])
+    if (cloud?.accounts?.length) {
+      const { mergeAccountsFromCloud } = await import('./auth')
+      mergeAccountsFromCloud(cloud.accounts)
+    }
+  } catch {}
+  if (listAccounts().some((a) => a.phone === phone || a.phone.replace(/\D/g, '').slice(-10) === phoneKey)) {
+    return { ok: false, error: 'exists' }
+  }
+
   const row = {
     id: uid(),
     full_name: name,
@@ -81,13 +93,13 @@ export async function submitRegistrationRequest(input: {
     note: null as string | null,
   }
 
-  // 1) Try table first (more reliable after migration)
+  // Upsert into table by phone
   let tableOk = false
   const sb = getSupabase()
   if (sb) {
     try {
       const { error } = await withTimeout(
-        sb.from('registration_requests').insert({
+        sb.from('registration_requests').upsert({
           id: row.id,
           full_name: row.full_name,
           phone: row.phone,
@@ -95,24 +107,21 @@ export async function submitRegistrationRequest(input: {
           branch: row.branch,
           status: row.status,
           created_at: row.created_at,
-        }),
+        }, { onConflict: 'phone' }),
         8000,
       )
       if (!error) tableOk = true
-      else console.warn('[reg] table insert:', error.message)
+      else console.warn('[reg] table upsert:', error.message)
     } catch (e) {
-      console.warn('[reg] table insert exception:', e)
+      console.warn('[reg] table upsert exception:', e)
     }
   }
 
-  // 2) Also try app_state (for admin list)
+  // app_state: replace any existing by phone
   let stateOk = false
   try {
     const prev = await withTimeout(loadRegRequests(), 6000).catch(() => [] as RegistrationRequest[])
-    if (prev.some((r) => r.status === 'pending' && (normalizePhone(r.phone) === phone || r.phone.replace(/\D/g, '').slice(-10) === phoneKey))) {
-      return { ok: false, error: 'exists' }
-    }
-    const next = [row, ...prev.filter((x) => x.id !== row.id && normalizePhone(x.phone) !== phone && x.phone.replace(/\D/g, '').slice(-10) !== phoneKey)]
+    const next = [row, ...prev.filter((x) => normalizePhone(x.phone) !== phone && x.phone.replace(/\D/g, '').slice(-10) !== phoneKey)]
     stateOk = await withTimeout(saveRegRequests(next), 6000).catch(() => false)
   } catch (e) {
     console.warn('[reg] app_state:', e)
@@ -125,16 +134,32 @@ export async function submitRegistrationRequest(input: {
   return { ok: false, error: 'save' }
 }
 
+/** Remove all approved (and optionally rejected) requests from both table and app_state. */
+export async function cleanProcessedRegistrationRequests(keepPending = true): Promise<number> {
+  const all = await listRegistrationRequests()
+  const toRemove = all.filter((r) => r.status !== 'pending' || !keepPending)
+  const remaining = all.filter((r) => !toRemove.some((x) => x.id === r.id))
+  await saveRegRequests(remaining)
+
+  const sb = getSupabase()
+  if (sb && toRemove.length) {
+    const ids = toRemove.map((r) => r.id).filter(Boolean)
+    if (ids.length) {
+      void sb.from('registration_requests').delete().in('id', ids).then(() => {}).catch(() => {})
+    }
+  }
+  return toRemove.length
+}
+
 export async function listRegistrationRequests(): Promise<RegistrationRequest[]> {
   const fromState: RegistrationRequest[] = await loadRegRequests().catch(() => [])
 
-  // Also read from table (student may have saved only there)
   let fromTable: RegistrationRequest[] = []
   const sb = getSupabase()
   if (sb) {
     try {
       const { data, error } = await withTimeout(
-        sb.from('registration_requests').select('*').order('created_at', { ascending: false }).limit(100),
+        sb.from('registration_requests').select('*').order('created_at', { ascending: false }).limit(200),
         6000,
       )
       if (!error && Array.isArray(data)) {
@@ -155,18 +180,20 @@ export async function listRegistrationRequests(): Promise<RegistrationRequest[]>
     }
   }
 
-  // Merge, prefer state, add table-only rows
-  const byId = new Map<string, RegistrationRequest>()
-  for (const r of fromState) if (r.id) byId.set(r.id, r)
-  for (const r of fromTable) if (r.id && !byId.has(r.id)) byId.set(r.id, r)
-  return [...byId.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  const byPhone = new Map<string, RegistrationRequest>()
+  for (const r of [...fromState, ...fromTable]) {
+    if (!r.phone) continue
+    const key = normalizePhone(r.phone)
+    const prev = byPhone.get(key)
+    if (!prev || (r.created_at || '') > (prev.created_at || '')) byPhone.set(key, r)
+  }
+  return [...byPhone.values()].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
 }
 
 export async function setRegistrationRequestStatus(
   id: string,
   status: 'approved' | 'rejected',
   note?: string,
-  /** Optional: pass current list to avoid an extra load */
   knownList?: RegistrationRequest[],
 ): Promise<boolean> {
   try {
@@ -179,7 +206,6 @@ export async function setRegistrationRequestStatus(
     console.warn('[reg] status app_state:', e)
     return false
   }
-  // Table update never blocks UI
   const sb = getSupabase()
   if (sb) {
     void Promise.resolve(
@@ -193,10 +219,6 @@ export async function setRegistrationRequestStatus(
   return true
 }
 
-/**
- * Approve a request: create Account + Student, save to cloud, mark request approved.
- * Batched cloud I/O so admin / phone are not stuck on sequential round-trips.
- */
 export async function approveRegistrationRequest(
   req: RegistrationRequest,
 ): Promise<{ ok: true; tempPassword: string } | { ok: false; error: string }> {
@@ -206,7 +228,6 @@ export async function approveRegistrationRequest(
 
   const phoneKey = phone.replace(/\D/g, '').slice(-10)
 
-  // One parallel read for everything we need
   const { loadSharedKeys } = await import('./sync')
   let cloud: Awaited<ReturnType<typeof loadSharedKeys>> = null
   try {
@@ -218,7 +239,6 @@ export async function approveRegistrationRequest(
     console.warn('[reg] approve load:', e)
   }
 
-  // Prefer cloud accounts for "already exists"
   if (cloud?.accounts?.length) {
     const { mergeAccountsFromCloud } = await import('./auth')
     mergeAccountsFromCloud(cloud.accounts)
@@ -262,7 +282,7 @@ export async function approveRegistrationRequest(
 
   const remoteStudents = (cloud?.students || []) as Student[]
   const nextStudents = [
-    ...remoteStudents.filter((s) => s.id !== student.id && s.phone !== phone),
+    ...remoteStudents.filter((s) => s.id !== student.id && normalizePhone(s.phone) !== phone),
     student,
   ]
 
@@ -296,7 +316,6 @@ export async function approveRegistrationRequest(
       : r,
   )
 
-  // Parallel writes
   await Promise.all([
     saveSharedKey('accounts', listAccounts()),
     saveSharedKey('students', nextStudents),
@@ -305,7 +324,6 @@ export async function approveRegistrationRequest(
     saveRegRequests(nextReqs),
   ])
 
-  // Also write password into the table so status check can find it
   const sb = getSupabase()
   if (sb) {
     void Promise.resolve(
@@ -322,7 +340,6 @@ export async function approveRegistrationRequest(
 
 const LOCAL_REQ_KEY = 'avtoemir.myRegRequest.v1'
 
-/** Remember that THIS device submitted this phone (so only this device can see the password). */
 export function rememberMyRequest(phone: string) {
   if (typeof window === 'undefined') return
   try {
@@ -332,7 +349,6 @@ export function rememberMyRequest(phone: string) {
   } catch { /* ignore */ }
 }
 
-/** True only if this device submitted a request for this phone. */
 export function isMyRequestPhone(phone: string): boolean {
   if (typeof window === 'undefined') return false
   try {
@@ -349,8 +365,6 @@ function phoneKeyOf(phone: string) {
   return normalizePhone(phone).replace(/\D/g, '').slice(-10)
 }
 
-/** Lookup approved registration by phone — returns temp password if still stored. */
-/** Public status check — does NOT return the password (privacy). */
 export async function isRegistrationApprovedByPhone(
   phone: string,
 ): Promise<{ fullName: string; phone: string } | null> {
@@ -374,7 +388,7 @@ export async function isRegistrationApprovedByPhone(
   if (sb) {
     try {
       const { data, error } = await withTimeout(
-        sb.from('registration_requests').select('full_name, phone, status').eq('status', 'approved').limit(100),
+        sb.from('registration_requests').select('full_name, phone, status').eq('status', 'approved').limit(200),
         5000,
       )
       if (!error && Array.isArray(data)) {
