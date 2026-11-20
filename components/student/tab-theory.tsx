@@ -155,12 +155,15 @@ function Curriculum() {
 }
 
 function SignImage({ sign }: { sign: { code: string; imageUrl?: string | null } }) {
-  const [failed, setFailed] = useState(false)
-  // Prefer local Vercel-hosted image: /signs/CODE.jpg (or .png)
-  const localSrc = `/signs/${sign.code}.jpg`
-  const src = sign.imageUrl && !sign.imageUrl.startsWith('/signs/') ? sign.imageUrl : localSrc
+  const [srcIndex, setSrcIndex] = useState(0)
+  const candidates = [
+    `/signs/${sign.code}.jpg`,
+    `/signs/${sign.code}.png`,
+    `/signs/${sign.code}.webp`,
+  ]
+  const src = candidates[srcIndex]
 
-  if (failed) {
+  if (srcIndex >= candidates.length) {
     return <RoadSignGraphic sign={sign as any} />
   }
 
@@ -169,7 +172,7 @@ function SignImage({ sign }: { sign: { code: string; imageUrl?: string | null } 
       src={src}
       alt={sign.code}
       className="max-h-40 max-w-full object-contain"
-      onError={() => setFailed(true)}
+      onError={() => setSrcIndex((i) => i + 1)}
     />
   )
 }
