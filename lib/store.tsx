@@ -251,7 +251,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory(() => ensureTheoryContent(cloud.theory!))
       if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
-      if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
+      if (Array.isArray(cloud.roadSigns)) setRoadSigns(cloud.roadSigns)
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
       if (cloud.school?.name) {
         setSchoolState((prev) => ({
@@ -968,7 +968,17 @@ dismissNotice: (noticeId) => {
       })
     },
     roadSigns,
-    setRoadSigns,
+    setRoadSigns: (next) => {
+      setRoadSigns(next)
+      void (async () => {
+        try {
+          const { saveSharedKey } = await import('./sync')
+          await saveSharedKey('roadSigns', next)
+        } catch (e) {
+          console.warn('[store] setRoadSigns cloud:', e)
+        }
+      })()
+    },
     presence,
     maintenanceMode,
     setMaintenanceMode: (on) => setMaintenanceModeState(on),
