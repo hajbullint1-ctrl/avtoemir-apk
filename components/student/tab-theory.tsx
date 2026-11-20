@@ -154,6 +154,26 @@ function Curriculum() {
   )
 }
 
+function SignImage({ sign }: { sign: { code: string; imageUrl?: string | null } }) {
+  const [failed, setFailed] = useState(false)
+  // Prefer local Vercel-hosted image: /signs/CODE.jpg (or .png)
+  const localSrc = `/signs/${sign.code}.jpg`
+  const src = sign.imageUrl && !sign.imageUrl.startsWith('/signs/') ? sign.imageUrl : localSrc
+
+  if (failed) {
+    return <RoadSignGraphic sign={sign as any} />
+  }
+
+  return (
+    <img
+      src={src}
+      alt={sign.code}
+      className="max-h-40 max-w-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function Flashcards() {
   const { t, tl, learnedSigns, toggleSign, roadSigns, me } = useStore()
   const [index, setIndex] = useState(0)
@@ -197,11 +217,7 @@ function Flashcards() {
           )}
         >
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border bg-muted/50 [backface-visibility:hidden]">
-            {sign.imageUrl ? (
-              <img src={sign.imageUrl} alt={sign.code} className="max-h-40 max-w-full object-contain" />
-            ) : (
-              <RoadSignGraphic sign={sign} />
-            )}
+            <SignImage sign={sign} />
             <span className="rounded-full bg-card px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
               {sign.code}
             </span>
