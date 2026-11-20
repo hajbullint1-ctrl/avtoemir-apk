@@ -1,5 +1,5 @@
-/* AvtoEmir Service Worker v6 — strict network for signs, clean old caches */
-const CACHE = 'avtoemir-v6'
+/* AvtoEmir Service Worker v7 — force fresh load */
+const CACHE = 'avtoemir-v7'
 const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -25,46 +25,29 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
 
-  // STRICT network-only for sign photos — never cache, never fallback to cache
+  // Never cache signs
   if (url.pathname.startsWith('/signs/')) {
     event.respondWith(fetch(request))
     return
   }
 
-  // Network-first for app shell
-  const isAppShell =
+  // Network-first for everything else important
+  const isFresh =
     request.mode === 'navigate' ||
     request.headers.get('accept')?.includes('text/html') ||
     url.pathname.startsWith('/_next/') ||
     url.pathname.endsWith('.js')
 
-  if (isAppShell) {
+  if (isFresh) {
     event.respondWith(
       fetch(request)
-        .then((res) => {
-          if (res.ok && (url.pathname.startsWith('/_next/') || url.pathname.match(/\.(js|css)$/))) {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
-          }
-          return res
-        })
+        .then((res) => res)
         .catch(() => caches.match(request).then((r) => r || caches.match('/'))),
     )
     return
   }
 
-  // Cache-first for other static (icons etc.)
   event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ||
-        fetch(request).then((res) => {
-          if (res.ok && url.pathname.match(/\.(png|jpg|svg|woff2?)$/) && !url.pathname.startsWith('/signs/')) {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put(request, copy))
-          }
-          return res
-        }),
-    ),
+    caches.match(request).then((cached) => cached || fetch(request)),
   )
 })
