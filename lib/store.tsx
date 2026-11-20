@@ -251,7 +251,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory(() => ensureTheoryContent(cloud.theory!))
       if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
-      if (Array.isArray(cloud.roadSigns)) setRoadSigns(cloud.roadSigns)
+      if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length >= seedRoadSigns.length) {
+        setRoadSigns(cloud.roadSigns)
+      } else {
+        // Restore full seed list if cloud is empty or was truncated
+        setRoadSigns(seedRoadSigns)
+        void (async () => {
+          try {
+            const { saveSharedKey } = await import('./sync')
+            await saveSharedKey('roadSigns', seedRoadSigns)
+          } catch (e) {
+            console.warn('[store] restore roadSigns:', e)
+          }
+        })()
+      }
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
       if (cloud.school?.name) {
         setSchoolState((prev) => ({
