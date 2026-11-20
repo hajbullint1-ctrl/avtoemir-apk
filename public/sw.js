@@ -1,5 +1,5 @@
-/* AvtoEmir Service Worker — network-first so app updates without APK rebuild */
-const CACHE = 'avtoemir-v4'
+/* AvtoEmir Service Worker — network-first for app updates and fresh sign photos */
+const CACHE = 'avtoemir-v5'
 const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
 self.addEventListener('install', (event) => {
@@ -24,14 +24,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
 
-  // Always prefer network for HTML and JS so deploys apply without new APK
-  const isAppShell =
+  // Network-first for HTML, JS, and sign photos so updates apply immediately
+  const isFresh =
     request.mode === 'navigate' ||
     request.headers.get('accept')?.includes('text/html') ||
     url.pathname.startsWith('/_next/') ||
-    url.pathname.endsWith('.js')
+    url.pathname.endsWith('.js') ||
+    url.pathname.startsWith('/signs/')
 
-  if (isAppShell) {
+  if (isFresh) {
     event.respondWith(
       fetch(request)
         .then((res) => {
@@ -46,6 +47,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Cache-first for other static assets
   event.respondWith(
     caches.match(request).then(
       (cached) =>
