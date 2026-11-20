@@ -1,17 +1,18 @@
-/* AvtoEmir Service Worker — network-first for app updates and fresh sign photos */
-const CACHE = 'avtoemir-v5'
+/* AvtoEmir Service Worker v6 — strict network for signs, clean old caches */
+const CACHE = 'avtoemir-v6'
 const PRECACHE = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/icon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting()),
   )
 })
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
+    caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   )
@@ -24,15 +25,20 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
 
-  // Network-first for HTML, JS, and sign photos so updates apply immediately
-  const isFresh =
+  // STRICT network-only for sign photos — never cache, never fallback to cache
+  if (url.pathname.startsWith('/signs/')) {
+    event.respondWith(fetch(request))
+    return
+  }
+
+  // Network-first for app shell
+  const isAppShell =
     request.mode === 'navigate' ||
     request.headers.get('accept')?.includes('text/html') ||
     url.pathname.startsWith('/_next/') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.startsWith('/signs/')
+    url.pathname.endsWith('.js')
 
-  if (isFresh) {
+  if (isAppShell) {
     event.respondWith(
       fetch(request)
         .then((res) => {
@@ -47,13 +53,13 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Cache-first for other static assets
+  // Cache-first for other static (icons etc.)
   event.respondWith(
     caches.match(request).then(
       (cached) =>
         cached ||
         fetch(request).then((res) => {
-          if (res.ok && url.pathname.match(/\.(png|jpg|svg|woff2?)$/)) {
+          if (res.ok && url.pathname.match(/\.(png|jpg|svg|woff2?)$/) && !url.pathname.startsWith('/signs/')) {
             const copy = res.clone()
             caches.open(CACHE).then((c) => c.put(request, copy))
           }
