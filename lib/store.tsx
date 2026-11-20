@@ -888,7 +888,32 @@ dismissNotice: (noticeId) => {
   })
 },
     
-deleteNotice: (id) => {
+
+    broadcastNotice: (title, body) => {
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+      const notice = {
+        id: `n_broadcast_${Date.now().toString(36)}`,
+        kind: 'announce' as const,
+        title,
+        body,
+        time: stamp,
+        read: false,
+      }
+      setNotices((list) => [notice, ...list])
+      void (async () => {
+        try {
+          const { loadSharedKeys, saveSharedKey } = await import('./sync')
+          const cloud = await loadSharedKeys(['notices'])
+          const prev = Array.isArray(cloud?.notices) ? cloud.notices : []
+          const next = [notice, ...prev.filter((n) => n.id !== notice.id)]
+          await saveSharedKey('notices', next)
+        } catch (e) {
+          console.warn('[store] broadcastNotice cloud:', e)
+        }
+      })()
+    },
+
+    deleteNotice: (id) => {
   setNotices((list) => {
     const next = list.filter((n) => n.id !== id)
     void (async () => {
