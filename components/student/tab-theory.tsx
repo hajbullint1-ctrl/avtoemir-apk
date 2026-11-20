@@ -9,6 +9,9 @@ import { useStore } from '@/lib/store'
 import { type TheoryTopic } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
+// Bump this number whenever you replace sign photos — forces WebView to ignore old cache
+const SIGNS_CACHE_VERSION = 7
+
 function TheoryDetail({
   topic,
   onBack,
@@ -157,9 +160,9 @@ function Curriculum() {
 function SignImage({ sign }: { sign: { code: string; imageUrl?: string | null } }) {
   const [srcIndex, setSrcIndex] = useState(0)
   const candidates = [
-    `/signs/${sign.code}.jpg`,
-    `/signs/${sign.code}.png`,
-    `/signs/${sign.code}.webp`,
+    `/signs/${sign.code}.jpg?v=${SIGNS_CACHE_VERSION}`,
+    `/signs/${sign.code}.png?v=${SIGNS_CACHE_VERSION}`,
+    `/signs/${sign.code}.webp?v=${SIGNS_CACHE_VERSION}`,
   ]
   const src = candidates[srcIndex]
 
