@@ -210,7 +210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void saveSharedToCloud({
         school, instructors, students, theory, questions, reviews,
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
-        learnedSigns, profiles, theoryProgress, roadSigns,
+        learnedSigns, profiles, theoryProgress,
       })
     }, 1200)
     return () => clearTimeout(t)
