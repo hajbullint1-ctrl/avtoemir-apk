@@ -134,6 +134,9 @@ function Curriculum() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-snug">{tl(topic.title)}</p>
+                {topic.category && (
+                  <p className="text-[11px] text-muted-foreground">{tl(topic.category)}</p>
+                )}
                 <div className="mt-1.5 flex items-center gap-2">
                   <ProgressBar value={(stats.done / Math.max(1, stats.total)) * 100} className="h-1.5" label={tl(topic.title)} />
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
