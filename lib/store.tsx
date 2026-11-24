@@ -168,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
-      if (cloud?.theory?.length) setTheory(ensureTheoryContent(cloud.theory))
+      // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
       if (cloud?.questions?.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
