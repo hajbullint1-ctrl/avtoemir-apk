@@ -994,7 +994,17 @@ dismissNotice: (noticeId) => {
     },
     presence,
     maintenanceMode,
-    setMaintenanceMode: (on) => setMaintenanceModeState(on),
+    setMaintenanceMode: (on) => {
+      setMaintenanceModeState(on)
+      void (async () => {
+        try {
+          const { saveSharedKey } = await import('./sync')
+          await saveSharedKey('maintenanceMode', on)
+        } catch (e) {
+          console.warn('[store] setMaintenanceMode:', e)
+        }
+      })()
+    },
   }), [ready, session, lang, students, me, school, theory, profiles, theoryProgress, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, roadSigns, presence, maintenanceMode, deletedRecords, updateStudent])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
