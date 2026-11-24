@@ -234,8 +234,8 @@ function Flashcards() {
           </div>
           <div className="absolute inset-0 flex flex-col justify-center gap-2 rounded-2xl bg-primary p-5 text-left text-primary-foreground [backface-visibility:hidden] [transform:rotateY(180deg)]">
             <span className="text-xs font-semibold opacity-80">{sign.code}</span>
-            <span className="text-lg font-bold leading-snug">{tl(sign.name)}</span>
-            <span className="text-sm leading-relaxed opacity-90">{tl(sign.meaning)}</span>
+            <span className="text-lg font-bold leading-snug">{sign.name ? tl(sign.name) : sign.code}</span>
+            <span className="text-sm leading-relaxed opacity-90">{sign.meaning ? tl(sign.meaning) : ''}</span>
           </div>
         </div>
       </button>
