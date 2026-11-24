@@ -134,7 +134,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (p) {
       if (Array.isArray(p.students)) setStudents(p.students as Student[])
       if (p.school) setSchoolState({ ...seedSchool, ...(p.school as School) })
-      if (Array.isArray(p.theory)) setTheory(ensureTheoryContent(p.theory as TheoryTopic[]))
+      // Always prefer fresh local seedTheory (ignore old cached list)
+      setTheory(seedTheory)
       if (Array.isArray(p.questions)) setQuestions(p.questions as Question[])
       if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
       if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
