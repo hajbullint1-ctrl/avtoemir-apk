@@ -248,7 +248,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const cloud = await loadSharedKeys(HEAVY_KEYS)
       if (!cloud) return
       if (Array.isArray(cloud.instructors)) setInstructors(cloud.instructors)
-      if (Array.isArray(cloud.theory) && cloud.theory.length) setTheory(() => ensureTheoryContent(cloud.theory!))
+      if (Array.isArray(cloud.theory)) {
+        const cloudTheory = ensureTheoryContent(cloud.theory)
+        const cloudIds = new Set(cloudTheory.map(t => t.id))
+        const missing = seedTheory.filter(t => !cloudIds.has(t.id))
+        if (missing.length) {
+          const merged = [...cloudTheory, ...missing]
+          setTheory(merged)
+          void (async () => {
+            try {
+              const { saveSharedKey } = await import('./sync')
+              await saveSharedKey('theory', merged)
+            } catch (e) {
+              console.warn('[store] merge theory:', e)
+            }
+          })()
+        } else {
+          setTheory(cloudTheory)
+        }
+      } else {
+        setTheory(seedTheory)
+      }
       if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
       if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length >= seedRoadSigns.length) {
