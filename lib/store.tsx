@@ -136,8 +136,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (p.school) setSchoolState({ ...seedSchool, ...(p.school as School) })
       // Always prefer fresh local seedTheory (ignore old cached list)
       setTheory(seedTheory)
-      // Always use fresh local seedQuestions
-      setQuestions(seedQuestions)
+      if (Array.isArray(p.questions) && p.questions.length) setQuestions(p.questions as Question[])
+      else setQuestions(seedQuestions)
       if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
       if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
       if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
@@ -172,7 +172,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
       // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
-      // questions and roadSigns stay local (seed) — skip cloud overwrite to save egress
+      if (cloud?.questions?.length) setQuestions(cloud.questions)
+      // roadSigns stay local
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
       if (cloud?.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
@@ -259,7 +260,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const extras = prev.filter((t) => !seedIds.has(t.id))
         return [...seedTheory, ...extras]
       })
-      // questions are local (seedQuestions)
+      if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
       // roadSigns dictionary is local (seedRoadSigns) — no cloud fetch
       setRoadSigns(seedRoadSigns)
