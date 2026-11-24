@@ -194,6 +194,9 @@ export function TheoryEditor() {
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{topic.title.ru || '—'}</p>
+                  {topic.category && (
+                    <p className="truncate text-[11px] text-primary/80">{topic.category.ru}</p>
+                  )}
                   <p className="truncate text-xs text-muted-foreground">
                     {content.length} {tl({ ru: 'уроков', kk: 'сабақ' })} • {topic.title.kk || ''}
                   </p>
