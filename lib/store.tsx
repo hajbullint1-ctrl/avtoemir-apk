@@ -493,7 +493,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     lang,
     setLang,
     t: (k) => dict[lang][k] || k,
-    tl: (v) => v[lang] || v.ru || '',
+    tl: (v) => (v && (v[lang] || v.ru)) || '',
     students,
     me,
     setCategory: (c) => updateStudent(me.id, (s) => ({ ...s, category: c })),
