@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, RotateCcw, ThumbsUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, ProgressBar } from '@/components/shared/section'
@@ -285,11 +285,38 @@ function Flashcards() {
   )
 }
 
+class TheoryErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
+  state = { error: null as string | null }
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <p className="font-semibold">Ошибка в разделе «Теория»</p>
+          <p className="mt-1 text-muted-foreground">{this.state.error}</p>
+          <button
+            type="button"
+            className="mt-3 text-xs underline"
+            onClick={() => this.setState({ error: null })}
+          >
+            Попробовать снова
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export function TabTheory() {
   return (
-    <div className="flex flex-col gap-4">
-      <Flashcards />
-      <Curriculum />
-    </div>
+    <TheoryErrorBoundary>
+      <div className="flex flex-col gap-4">
+        <Flashcards />
+        <Curriculum />
+      </div>
+    </TheoryErrorBoundary>
   )
 }
