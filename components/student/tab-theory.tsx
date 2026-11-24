@@ -10,7 +10,7 @@ import { type TheoryTopic } from '@/lib/data'
 import { cn } from '@/lib/utils'
 
 // Bump this number whenever you replace sign photos — forces WebView to ignore old cache
-const SIGNS_CACHE_VERSION = 7
+const SIGNS_CACHE_VERSION = 8
 
 function TheoryDetail({
   topic,
