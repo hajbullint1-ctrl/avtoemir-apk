@@ -708,8 +708,8 @@ export const LIVE_KEYS: SharedKey[] = [
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  // theory, questions and roadSigns texts are local — not fetched to save egress
-  'instructors', 'reviews', 'school',
+  // theory and roadSigns stay local; questions restored from cloud
+  'instructors', 'questions', 'reviews', 'school',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
