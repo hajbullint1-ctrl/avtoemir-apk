@@ -169,8 +169,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
       // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
-      if (cloud?.questions?.length) setQuestions(cloud.questions)
-      if (Array.isArray(cloud?.roadSigns) && cloud.roadSigns.length) setRoadSigns(cloud.roadSigns)
+      // questions and roadSigns stay local (seed) — skip cloud overwrite to save egress
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
       if (cloud?.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
@@ -257,22 +256,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const extras = prev.filter((t) => !seedIds.has(t.id))
         return [...seedTheory, ...extras]
       })
-      if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
+      // questions are local (seedQuestions)
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
-      if (Array.isArray(cloud.roadSigns) && cloud.roadSigns.length >= seedRoadSigns.length) {
-        setRoadSigns(cloud.roadSigns)
-      } else {
-        // Restore full seed list if cloud is empty or was truncated
-        setRoadSigns(seedRoadSigns)
-        void (async () => {
-          try {
-            const { saveSharedKey } = await import('./sync')
-            await saveSharedKey('roadSigns', seedRoadSigns)
-          } catch (e) {
-            console.warn('[store] restore roadSigns:', e)
-          }
-        })()
-      }
+      // roadSigns dictionary is local (seedRoadSigns) — no cloud fetch
+      setRoadSigns(seedRoadSigns)
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
       if (cloud.school?.name) {
         setSchoolState((prev) => ({
