@@ -298,14 +298,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     void pullLive()
     // Heavy content once per open
-    void pullHeavy()
+    // Heavy content (theory, signs, questions) — max once per 6 hours
+    const heavyStamp = Number(localStorage.getItem('ae-heavy-stamp') || 0)
+    if (Date.now() - heavyStamp > 6 * 60 * 60 * 1000) {
+      void pullHeavy().then(() => localStorage.setItem('ae-heavy-stamp', String(Date.now())))
+    }
 
     // Poll every 2 min, only when tab is visible
     const liveId = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         void pullLive()
       }
-    }, 300_000)
+    }, 600_000)  // 10 min — less egress
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') void pullLive()
