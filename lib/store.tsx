@@ -136,7 +136,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (p.school) setSchoolState({ ...seedSchool, ...(p.school as School) })
       // Always prefer fresh local seedTheory (ignore old cached list)
       setTheory(seedTheory)
-      if (Array.isArray(p.questions)) setQuestions(p.questions as Question[])
+      // Always use fresh local seedQuestions
+      setQuestions(seedQuestions)
       if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
       if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
       if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
@@ -144,7 +145,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
       if (Array.isArray(p.results)) setResults(p.results as TestResult[])
       if (p.learnedSigns && typeof p.learnedSigns === "object" && !Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as Record<string, string[]>)
-      if (Array.isArray(p.roadSigns)) setRoadSigns(p.roadSigns as RoadSign[])
+      // Always use fresh local seedRoadSigns (ignore old cache)
+      setRoadSigns(seedRoadSigns)
       if (Array.isArray(p.profiles)) setProfiles(p.profiles as ProfileRow[])
       if (p.theoryProgress && typeof p.theoryProgress === 'object') setTheoryProgress(p.theoryProgress as Record<string, string[]>)
     }
