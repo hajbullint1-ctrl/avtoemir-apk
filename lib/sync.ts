@@ -708,7 +708,8 @@ export const LIVE_KEYS: SharedKey[] = [
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  'instructors', 'theory', 'questions', 'reviews', 'roadSigns', 'school',
+  // theory texts are local (seedTheory) — not fetched to save egress
+  'instructors', 'questions', 'reviews', 'roadSigns', 'school',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [
