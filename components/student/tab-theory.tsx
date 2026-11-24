@@ -55,14 +55,14 @@ function TheoryDetail({
         {t('curriculum')}
       </Button>
       <p className="mb-1 text-xs font-medium text-muted-foreground">{tl(topic.title)}</p>
-      <h2 className="mb-1 text-lg font-bold leading-snug">{tl(lesson.title)}</h2>
+      <h2 className="mb-1 text-lg font-bold leading-snug">{lesson?.title ? tl(lesson.title) : ''}</h2>
       <p className="mb-4 text-xs text-muted-foreground">
         {tl({ ru: 'Урок', kk: 'Сабақ' })} {lessonIdx + 1} {t('of')} {lessons.length}
       </p>
       {lesson.imageUrl ? (
         <img src={lesson.imageUrl} alt="" className="mb-4 max-h-64 w-full rounded-xl border bg-muted/40 object-contain" />
       ) : null}
-      <div className="mb-6 whitespace-pre-wrap text-sm leading-relaxed text-pretty">{tl(lesson.body)}</div>
+      <div className="mb-6 whitespace-pre-wrap text-sm leading-relaxed text-pretty">{lesson.body ? tl(lesson.body) : ''}</div>
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
@@ -119,11 +119,12 @@ function Curriculum() {
     <Section title={t('curriculum')} action={<span className="text-sm font-semibold text-primary">{Math.round((done / total) * 100)}%</span>}>
       <ProgressBar value={(done / total) * 100} label={t('curriculum')} className="mb-4" />
       <ol className="flex flex-col gap-2">
-        {theory.map((topic, idx) => {
+        {theory.filter(Boolean).map((topic, idx) => {
+          if (!topic?.title) return null
           const stats = topicStats(topic, doneIds)
           const complete = stats.total > 0 && stats.done >= stats.total
           return (
-            <li key={topic.id} className="flex items-center gap-3 rounded-xl border p-3">
+            <li key={topic.id || idx} className="flex items-center gap-3 rounded-xl border p-3">
               <span
                 className={cn(
                   'flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold',
