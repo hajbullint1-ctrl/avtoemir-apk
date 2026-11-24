@@ -23,7 +23,7 @@ function TheoryDetail({
   const lessons = topic.content ?? []
   const [lessonIdx, setLessonIdx] = useState(0)
   const lesson = lessons[lessonIdx]
-  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const doneIds = new Set(theoryProgress[me?.id] ?? [])
   const lessonDone = lesson ? doneIds.has(lesson.id) : false
 
   const markDone = () => {
@@ -106,10 +106,10 @@ function topicStats(topic: TheoryTopic, doneIds: Set<string>) {
 function Curriculum() {
   const { me, theory, theoryProgress, t, tl } = useStore()
   const [openId, setOpenId] = useState<string | null>(null)
-  const doneIds = new Set(theoryProgress[me.id] ?? [])
+  const doneIds = new Set(theoryProgress[me?.id] ?? [])
   const total = theory.reduce((a, b) => a + topicStats(b, doneIds).total, 0) || 1
   const done = theory.reduce((a, b) => a + topicStats(b, doneIds).done, 0)
-  const openTopic = theory.find((x) => x.id === openId)
+  const openTopic = (theory || []).find((x) => x && x.id === openId)
 
   if (openTopic) {
     return <TheoryDetail topic={openTopic} onBack={() => setOpenId(null)} />
@@ -210,7 +210,7 @@ function Flashcards() {
       title={t('roadSigns')}
       action={
         <span className="text-xs font-medium text-muted-foreground">
-          {t('learned')}: {(learnedSigns[me.id] || []).length}/{signs.length}
+          {t('learned')}: {(learnedSigns[me?.id] || []).length}/{signs.length}
         </span>
       }
     >
@@ -249,7 +249,7 @@ function Flashcards() {
           variant="outline"
           className="flex-1"
           onClick={() => {
-            toggleSign(sign.id, false)
+            sign?.id && toggleSign(sign.id, false)
             go(1)
           }}
         >
@@ -259,7 +259,7 @@ function Flashcards() {
         <Button
           className="flex-1"
           onClick={() => {
-            toggleSign(sign.id, true)
+            sign?.id && toggleSign(sign.id, true)
             go(1)
           }}
         >
@@ -276,7 +276,7 @@ function Flashcards() {
             key={s.id}
             className={cn(
               'size-1.5 rounded-full',
-              i === index ? 'bg-primary' : (learnedSigns[me.id] || []).includes(s.id) ? 'bg-success' : 'bg-border',
+              i === index ? 'bg-primary' : (learnedSigns[me?.id] || []).includes(s.id) ? 'bg-success' : 'bg-border',
             )}
           />
         ))}
