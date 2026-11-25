@@ -171,15 +171,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
       const cloud = await loadSharedFromCloud()
-      if (cloud?.school?.name) {
-        setSchoolState({
-          ...seedSchool,
-          ...cloud.school,
-          website: cloud.school.website ?? '',
-          instagram: cloud.school.instagram ?? '',
-          branches: cloud.school.branches?.length ? cloud.school.branches : seedSchool.branches,
-        })
-      }
+      // school stays local (seedSchool + localStorage) — skip cloud to cut egress
+      // theory / questions / roadSigns stay local too
       if (cloud?.instructors?.length) setInstructors(cloud.instructors)
       if (cloud?.notices?.length) setNotices(cloud.notices)
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
@@ -223,7 +216,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ready || !isSupabaseConfigured) return
     const t = setTimeout(() => {
       void saveSharedToCloud({
-        school, instructors, students, theory, questions, reviews,
+        instructors, students, reviews,
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress,
       })
@@ -279,14 +272,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // roadSigns dictionary is local (seedRoadSigns) — no cloud fetch
       setRoadSigns(seedRoadSigns)
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
-      if (cloud.school?.name) {
-        setSchoolState((prev) => ({
-          ...prev,
-          ...cloud.school!,
-          website: cloud.school!.website ?? prev.website,
-          instagram: cloud.school!.instagram ?? prev.instagram,
-        }))
-      }
+      // school / theory / questions / roadSigns stay local — no cloud apply
     }
 
     void pullLive()
@@ -986,7 +972,19 @@ dismissNotice: (noticeId) => {
       setResults((list) => [item, ...list])
       void forceSaveResults([item, ...results])
     },
-    clearResults: () => setResults([]),
+    clearResults: () => {
+      setResults([])
+      resultsIgnoreUntil.current = Date.now() + 20_000
+      void forceSaveResults([])
+      try {
+        const raw = localStorage.getItem('avtoemir.store.v2')
+        if (raw) {
+          const p = JSON.parse(raw)
+          p.results = []
+          localStorage.setItem('avtoemir.store.v2', JSON.stringify(p))
+        }
+      } catch {}
+    },
     learnedSigns,
     toggleSign: (id, known) => {
       const meId = session?.accountId

@@ -326,20 +326,16 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
   }
 }
 
+const LIGHT_KEYS: SharedKey[] = [
+  'instructors', 'notices', 'students', 'reviews',
+  'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
+  'theoryProgress', 'presence', 'droppedMessageIds', 'studentMistakes',
+  'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode', 'registrationRequests', 'regCredentials',
+]
+
 export async function loadSharedFromCloud(): Promise<SharedSlice | null> {
-  const sb = getSupabase()
-  if (!sb) return null
-  try {
-    const { data, error } = await sb.from('app_state').select('key, data').in('key', [...KEYS])
-    if (error) { console.warn('[sync] load error:', error.message); return null }
-    if (!data?.length) return null
-    const out: SharedSlice = {}
-    for (const row of data) parseRow(out, row.key, row.data)
-    return out
-  } catch (e) {
-    console.warn('[sync] load exception:', e)
-    return null
-  }
+  // Exclude school, theory, questions, roadSigns — served from local seed + /questions.json + localStorage
+  return loadSharedKeys(LIGHT_KEYS)
 }
 
 export async function loadSharedKeys(keys: SharedKey[]): Promise<SharedSlice | null> {
@@ -708,8 +704,8 @@ export const LIVE_KEYS: SharedKey[] = [
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  // theory and roadSigns stay local; questions restored from cloud
-  'instructors', 'questions', 'reviews', 'school',
+  // theory, questions, roadSigns, school stay local (seed + /questions.json + localStorage)
+  'instructors', 'reviews',
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [

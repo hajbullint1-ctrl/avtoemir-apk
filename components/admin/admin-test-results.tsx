@@ -16,6 +16,14 @@ export function AdminTestResults() {
         }
       : () => {
           void saveSharedKey('results', [])
+          try {
+            const raw = localStorage.getItem('avtoemir.store.v2')
+            if (raw) {
+              const parsed = JSON.parse(raw)
+              parsed.results = []
+              localStorage.setItem('avtoemir.store.v2', JSON.stringify(parsed))
+            }
+          } catch {}
           window.location.reload()
         }
   const sorted = [...results].reverse()
