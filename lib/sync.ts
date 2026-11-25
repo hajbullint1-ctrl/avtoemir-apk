@@ -327,7 +327,8 @@ function parseRow(out: SharedSlice, key: string, d: unknown) {
 }
 
 const LIGHT_KEYS: SharedKey[] = [
-  'instructors', 'notices', 'students', 'reviews',
+  // instructors/reviews loaded rarely via HEAVY_KEYS
+  'notices', 'students',
   'messages', 'bookings', 'accounts', 'recovery', 'results', 'learnedSigns', 'profiles',
   'theoryProgress', 'presence', 'droppedMessageIds', 'studentMistakes',
   'deletedStudentIds', 'deletedAccountIds', 'deletedRecords', 'maintenanceMode', 'registrationRequests', 'regCredentials',

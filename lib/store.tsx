@@ -184,7 +184,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
       if (cloud?.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
-        setMessages(cloud.messages.filter((m) => !dropped.has(m.id)))
+        const clean = cloud.messages.filter((m) => !dropped.has(m.id))
+        setMessages(clean.slice(-300))
       }
       if (cloud?.bookings) setBookings(cloud.bookings)
       if (cloud?.accounts || cloud?.deletedAccountIds?.length) {
@@ -192,7 +193,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       if (cloud?.recovery?.length) mergeRecoveryFromCloud(cloud.recovery)
       if (Array.isArray(cloud?.results)) {
-        setResults(cloud.results!.length ? mergeById([], cloud.results!) : [])
+        const list = cloud.results!.length ? mergeById([], cloud.results!) : []
+        setResults(list.slice(0, 200))
       }
       if (cloud?.learnedSigns && !Array.isArray(cloud.learnedSigns)) setLearnedSigns((prev) => mergeProgressMaps(prev, cloud.learnedSigns!))
       if (cloud?.theoryProgress) setTheoryProgress((prev) => mergeProgressMaps(prev, cloud.theoryProgress!))
@@ -248,7 +250,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStudents((prev) => prev.filter((s) => !ban.has(s.id)))
       }
       if (Array.isArray(cloud.results) && Date.now() > resultsIgnoreUntil.current) {
-        setResults(cloud.results)
+        setResults(cloud.results.slice(0, 200))
       }
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
     }
@@ -257,7 +259,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const pullHeavy = async () => {
       const cloud = await loadSharedKeys(HEAVY_KEYS)
       if (!cloud) return
-      if (Array.isArray(cloud.instructors)) setInstructors(cloud.instructors)
+      if (Array.isArray(cloud.instructors) && cloud.instructors.length) setInstructors(cloud.instructors)
+      else setInstructors((prev) => (prev.length ? prev : seedInstructors))
       // Theory lesson texts are served from local seedTheory (no Supabase egress on read).
       // Keep local list as source of truth for students. Admin edits still save to cloud
       // but do not force a full re-download on every open.
@@ -283,15 +286,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void pullHeavy().then(() => localStorage.setItem('ae-heavy-stamp', String(Date.now())))
     }
 
-    // Poll every 2 min, only when tab is visible
+    // Poll every 10 min, only when tab is visible
+    let lastLive = Date.now()
     const liveId = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        lastLive = Date.now()
         void pullLive()
       }
     }, 600_000)  // 10 min — less egress
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void pullLive()
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastLive < 60_000) return
+      lastLive = Date.now()
+      void pullLive()
     }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onVisible)
