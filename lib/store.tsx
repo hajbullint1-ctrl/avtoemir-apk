@@ -60,10 +60,10 @@ type Store = {
   archiveStudent: (id: string) => void
   unarchiveStudent: (id: string) => void
   deleteStudent: (id: string) => void
- purgeApprovedStudents: () => 0,
-  deletedRecords: [],
-  restoreDeletedAccount: () => false,
-  purgeDeletedRecord: () => {},
+  purgeApprovedStudents: () => number
+  deletedRecords: DeletedRecord[]
+  restoreDeletedAccount: (id: string) => boolean
+  purgeDeletedRecord: (id: string) => void
   school: School
   setSchool: (s: School) => void
   theory: TheoryTopic[]

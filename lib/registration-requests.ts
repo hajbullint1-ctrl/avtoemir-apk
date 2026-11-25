@@ -145,7 +145,7 @@ export async function cleanProcessedRegistrationRequests(keepPending = true): Pr
   if (sb && toRemove.length) {
     const ids = toRemove.map((r) => r.id).filter(Boolean)
     if (ids.length) {
-      void sb.from('registration_requests').delete().in('id', ids).then(() => {}).catch(() => {})
+      void Promise.resolve(sb.from('registration_requests').delete().in('id', ids)).then(() => {}).catch(() => {})
     }
   }
   return toRemove.length
