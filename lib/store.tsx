@@ -274,7 +274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const extras = prev.filter((t) => !seedIds.has(t.id))
         return [...seedTheory, ...extras]
       })
-      if (Array.isArray(cloud.questions) && cloud.questions.length) setQuestions(cloud.questions)
+      // questions stay local from /questions.json
       if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
       // roadSigns dictionary is local (seedRoadSigns) — no cloud fetch
       setRoadSigns(seedRoadSigns)
