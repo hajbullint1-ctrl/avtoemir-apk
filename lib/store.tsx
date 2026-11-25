@@ -1005,15 +1005,8 @@ dismissNotice: (noticeId) => {
     },
     roadSigns,
     setRoadSigns: (next) => {
+      // Signs dictionary + images are local (seed + public/signs). Do not upload to Supabase.
       setRoadSigns(next)
-      void (async () => {
-        try {
-          const { saveSharedKey } = await import('./sync')
-          await saveSharedKey('roadSigns', next)
-        } catch (e) {
-          console.warn('[store] setRoadSigns cloud:', e)
-        }
-      })()
     },
     presence,
     maintenanceMode,

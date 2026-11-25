@@ -163,24 +163,20 @@ function Curriculum() {
 }
 
 function SignImage({ sign }: { sign: { code: string; imageUrl?: string | null } }) {
-  const [srcIndex, setSrcIndex] = useState(0)
-  const candidates = [
-    `/signs/${sign.code}.jpg?v=${SIGNS_CACHE_VERSION}`,
-    `/signs/${sign.code}.png?v=${SIGNS_CACHE_VERSION}`,
-    `/signs/${sign.code}.webp?v=${SIGNS_CACHE_VERSION}`,
-  ]
-  const src = candidates[srcIndex]
+  const [failed, setFailed] = useState(false)
+  // Local static file from public/signs — browser caches via Cache-Control immutable
+  const src = sign.imageUrl && !sign.imageUrl.startsWith('data:')
+    ? sign.imageUrl
+    : `/signs/${sign.code}.jpg?v=${SIGNS_CACHE_VERSION}`
 
-  if (srcIndex >= candidates.length) {
-    return <RoadSignGraphic sign={sign as any} />
-  }
+  if (failed) return <RoadSignGraphic sign={sign as any} />
 
   return (
     <img
       src={src}
       alt={sign.code}
       className="max-h-40 max-w-full object-contain"
-      onError={() => setSrcIndex((i) => i + 1)}
+      onError={() => setFailed(true)}
     />
   )
 }
