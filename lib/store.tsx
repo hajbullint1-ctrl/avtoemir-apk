@@ -147,13 +147,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const p = loadPersisted()
     if (p) {
       if (Array.isArray(p.students)) setStudents(p.students as Student[])
-      if (p.school) setSchoolState({ ...seedSchool, ...(p.school as School) })
+      // Always use fresh seedSchool (ignore old cached school/routes)
+      setSchoolState(seedSchool)
       // Always prefer fresh local seedTheory (ignore old cached list)
       setTheory(seedTheory)
       if (Array.isArray(p.questions) && p.questions.length) setQuestions(p.questions as Question[])
       else setQuestions(seedQuestions)
-      if (Array.isArray(p.instructors)) setInstructors(p.instructors as Instructor[])
-      if (Array.isArray(p.reviews)) setReviews(p.reviews as Review[])
+      // Always use fresh seedInstructors (Sabit)
+      setInstructors(seedInstructors)
+      // Reviews stay empty unless admin adds new ones
+      setReviews(seedReviews)
       if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
       if (Array.isArray(p.notices)) setNotices(p.notices as Notice[])
       if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
@@ -173,7 +176,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const cloud = await loadSharedFromCloud()
       // school stays local (seedSchool + localStorage) — skip cloud to cut egress
       // theory / questions / roadSigns stay local too
-      if (cloud?.instructors?.length) setInstructors(cloud.instructors)
+      // instructors stay local (seedInstructors / Sabit)
       if (cloud?.notices?.length) setNotices(cloud.notices)
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
@@ -181,7 +184,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
       // questions loaded from local /questions.json
       // roadSigns stay local
-      if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
+      // reviews stay local (empty seed)
       if (cloud?.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
         const clean = cloud.messages.filter((m) => !dropped.has(m.id))
@@ -259,8 +262,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const pullHeavy = async () => {
       const cloud = await loadSharedKeys(HEAVY_KEYS)
       if (!cloud) return
-      if (Array.isArray(cloud.instructors) && cloud.instructors.length) setInstructors(cloud.instructors)
-      else setInstructors((prev) => (prev.length ? prev : seedInstructors))
+      // instructors stay local
+      setInstructors(seedInstructors)
       // Theory lesson texts are served from local seedTheory (no Supabase egress on read).
       // Keep local list as source of truth for students. Admin edits still save to cloud
       // but do not force a full re-download on every open.
@@ -271,7 +274,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return [...seedTheory, ...extras]
       })
       // questions stay local from /questions.json
-      if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
+      // reviews stay local
+      setReviews(seedReviews)
       // roadSigns dictionary is local (seedRoadSigns) — no cloud fetch
       setRoadSigns(seedRoadSigns)
       if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
