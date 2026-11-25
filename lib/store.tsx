@@ -113,6 +113,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [school, setSchoolState] = useState(seedSchool)
   const [theory, setTheory] = useState(seedTheory as TheoryTopic[])
   const [questions, setQuestions] = useState(seedQuestions)
+
+  // Load full local questions bank once (no Supabase)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/questions.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data) && data.length > 10) {
+          setQuestions(data)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const [instructors, setInstructors] = useState(seedInstructors)
   const [reviews, setReviews] = useState(seedReviews)
   const [messages, setMessages] = useState(seedMessages)
@@ -172,7 +186,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
       }
       // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
-      if (cloud?.questions?.length) setQuestions(cloud.questions)
+      // questions loaded from local /questions.json
       // roadSigns stay local
       if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
       if (cloud?.messages) {
