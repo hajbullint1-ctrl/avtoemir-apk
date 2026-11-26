@@ -1,25 +1,31 @@
 package com.avtoemir.app;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    private static final String LIVE = "https://avtoemir-apk.vercel.app/?apk=12";
+    private static final String LIVE = "https://avtoemir-apk.vercel.app/?apk=13";
     private boolean opened;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(CertificateWidgetPlugin.class);
         super.onCreate(savedInstanceState);
+        openLive(0);
     }
 
-    @Override
-    public void onStart() {
-        super.onStart();
-        if (opened || getBridge() == null || getBridge().getWebView() == null) return;
+    private void openLive(int attempt) {
+        if (opened) return;
+        if (getBridge() == null || getBridge().getWebView() == null) {
+            if (attempt < 30) handler.postDelayed(() -> openLive(attempt + 1), 200);
+            return;
+        }
         opened = true;
         WebView wv = getBridge().getWebView();
         WebSettings settings = wv.getSettings();
@@ -28,12 +34,9 @@ public class MainActivity extends BridgeActivity {
         settings.setDatabaseEnabled(true);
         settings.setJavaScriptEnabled(true);
         wv.clearCache(true);
-        wv.clearHistory();
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(wv, true);
-        // Always open the live site. Capacitor otherwise keeps a cached or local shell
-        // and the phone never syncs with the admin on Vercel.
-        wv.post(() -> wv.loadUrl(LIVE));
+        wv.loadUrl(LIVE);
     }
 }

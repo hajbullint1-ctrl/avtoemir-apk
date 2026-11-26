@@ -345,7 +345,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         lastLive = Date.now()
         void pullLive()
       }
-    }, 600_000)  // 10 min — less egress
+    }, 15_000)  // 15s — WebView often has no realtime
 
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
@@ -1054,7 +1054,44 @@ dismissNotice: (noticeId) => {
       })()
     },
     cancelBooking: (id, opts) => {
+      const booking = bookings.find((b) => b.id === id)
       setBookings((list) => list.filter((b) => b.id !== id))
+      if (opts?.notifyStudent && booking) {
+        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+        const notice = {
+          id: `n_cancel_${id}_${Date.now().toString(36)}`,
+          kind: 'lesson' as const,
+          title: { ru: 'Запись на вождение отменена', kk: 'Жүргізуге жазылу болдырылмады' },
+          body: {
+            ru: `Запись на ${booking.date} в ${booking.time} отменена администратором.`,
+            kk: `${booking.date} сағат ${booking.time} жазылуы әкімшімен болдырылмады.`,
+          },
+          time: stamp,
+          read: false,
+          studentId: booking.studentId,
+        }
+        setNotices((list) => [notice, ...list])
+        void (async () => {
+          try {
+            const { saveBookingsMerged, loadSharedKeys, saveSharedKey } = await import('./sync')
+            await saveBookingsMerged(bookings.filter((b) => b.id !== id), [id])
+            const cloud = await loadSharedKeys(['notices'])
+            const prev = Array.isArray(cloud?.notices) ? cloud.notices : []
+            await saveSharedKey('notices', [notice, ...prev.filter((n) => n.id !== notice.id)])
+          } catch (e) {
+            console.warn('[store] cancelBooking:', e)
+          }
+        })()
+      } else {
+        void (async () => {
+          try {
+            const { saveBookingsMerged } = await import('./sync')
+            await saveBookingsMerged(bookings.filter((b) => b.id !== id), [id])
+          } catch (e) {
+            console.warn('[store] cancelBooking:', e)
+          }
+        })()
+      }
     },
     results,
     addResult: (score, total) => {
