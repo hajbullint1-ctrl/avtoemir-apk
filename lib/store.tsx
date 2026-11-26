@@ -221,7 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ready || !isSupabaseConfigured) return
     const t = setTimeout(() => {
       void saveSharedToCloud({
-        instructors, students, reviews,
+        students,
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress,
       })
@@ -258,12 +258,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
     }
 
+    // Admin-editable content (school, instructors) — at most once per hour, never on every tab
+    const ADMIN_STAMP_KEY = 'ae-admin-content-stamp'
+    const pullAdminContent = async () => {
+      const cloud = await loadSharedKeys(['school', 'instructors'])
+      if (!cloud) return
+      if (cloud.school?.name && cloud.school.hours?.ru && cloud.school.website) {
+        setSchoolState((prev) => ({
+          ...seedSchool,
+          ...cloud.school!,
+          hours: cloud.school!.hours?.ru ? cloud.school!.hours : seedSchool.hours,
+          website: cloud.school!.website || seedSchool.website,
+          instagram: cloud.school!.instagram || seedSchool.instagram,
+          branches: cloud.school!.branches?.length ? cloud.school!.branches : seedSchool.branches,
+          routes: cloud.school!.routes?.length ? cloud.school!.routes : seedSchool.routes,
+        }))
+      }
+      if (Array.isArray(cloud.instructors) && cloud.instructors.some((i) => i.phone === '87718875980' || (i.car || '').includes('180ABK'))) {
+        setInstructors(cloud.instructors)
+      }
+    }
+    const adminStamp = Number(localStorage.getItem(ADMIN_STAMP_KEY) || 0)
+    if (Date.now() - adminStamp > 60 * 60 * 1000) {
+      void pullAdminContent().then(() => localStorage.setItem(ADMIN_STAMP_KEY, String(Date.now())))
+    }
+
     // Heavy content rarely (theory, tickets, signs) — was the main egress leak
     const pullHeavy = async () => {
       const cloud = await loadSharedKeys(HEAVY_KEYS)
       if (!cloud) return
-      // instructors stay local
-      setInstructors(seedInstructors)
+      // instructors stay local unless hourly admin pull applied
+      setInstructors((prev) => (prev.length ? prev : seedInstructors))
       // Theory lesson texts are served from local seedTheory (no Supabase egress on read).
       // Keep local list as source of truth for students. Admin edits still save to cloud
       // but do not force a full re-download on every open.
@@ -801,7 +826,15 @@ deleteStudent: (id) => {
       setDeletedRecords((prev) => prev.filter((r) => r.id !== id))
     },
     school,
-    setSchool: (s) => setSchoolState(s),
+    setSchool: (s) => {
+      setSchoolState(s)
+      void (async () => {
+        try {
+          const { saveSchoolMerged } = await import('./sync')
+          await saveSchoolMerged(s)
+        } catch (e) { console.warn('[store] setSchool:', e) }
+      })()
+    },
     theory,
     setTheory,
     profiles,
@@ -820,7 +853,15 @@ deleteStudent: (id) => {
     questions,
     setQuestions,
     instructors,
-    setInstructors,
+    setInstructors: (list) => {
+      setInstructors(list)
+      void (async () => {
+        try {
+          const { saveInstructorsSafe } = await import('./sync')
+          await saveInstructorsSafe(list)
+        } catch (e) { console.warn('[store] setInstructors:', e) }
+      })()
+    },
     reviews,
     setReviews,
     addReview: (r) => {
