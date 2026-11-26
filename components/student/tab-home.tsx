@@ -208,7 +208,9 @@ export function TabHome() {
           ) : null}
           {school.phoneSupport ? (
             <a
-              href={`tel:${school.phoneSupport.replace(/[^\d+]/g, '')}`}
+              href={`https://wa.me/${toWhatsAppNumber(school.phoneSupport)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center justify-between rounded-xl border p-3 text-sm font-semibold hover:border-primary/50"
             >
               <span className="flex min-w-0 items-start gap-3">
@@ -225,7 +227,7 @@ export function TabHome() {
                   </span>
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-medium text-primary">{t('call')}</span>
+              <span className="shrink-0 text-xs font-medium text-primary">{t('whatsapp')}</span>
             </a>
           ) : null}
         </div>

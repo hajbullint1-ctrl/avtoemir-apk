@@ -356,7 +356,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const me = useMemo(() => {
     const id = session?.accountId
-    const found = students.find((s) => s.id === id)
+    const phone = (session?.phone || '').replace(/\D/g, '').slice(-10)
+    const found =
+      students.find((s) => s.id === id) ||
+      (phone.length >= 10 ? students.find((s) => (s.phone || '').replace(/\D/g, '').slice(-10) === phone) : undefined)
     if (found) {
       return {
         ...found,

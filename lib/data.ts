@@ -135,7 +135,7 @@ export const seedSchool: School = {
   hours: { ru: 'Пн–Пт 9:00–17:00', kk: 'Дс–Жм 9:00–17:00' },
   phones: ['+7 708 342 51 71'],
   phoneEnrollment: '+7 708 342 51 71',
-  phoneSupport: '+7 708 342 51 71',
+  phoneSupport: '87073060462',
   instagram: 'https://www.instagram.com/avtoshkola_turkestan_avtoemir',
   website: 'https://avtoemir.autos/',
   examAddress: DEFAULT_EXAM_ADDRESS,

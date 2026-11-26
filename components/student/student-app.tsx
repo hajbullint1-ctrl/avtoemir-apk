@@ -30,7 +30,7 @@ export function StudentApp() {
   const [showAbout, setShowAbout] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const isGuest = !session || session.accountId === 'guest_play_review'
-  const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id) && !n.read).length
+  const unread = notices.filter((n) => (!n.studentId || n.studentId === me.id || n.studentId === session?.accountId) && !n.read && !(n.dismissedBy || []).includes(me.id) && !(n.dismissedBy || []).includes(session?.accountId || '')).length
 
   // Leave About / guest mode and return to the real login screen
   const exitToLogin = () => {
