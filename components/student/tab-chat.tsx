@@ -138,9 +138,10 @@ function Chat() {
 }
 
 function Notifications() {
-  const { t, tl, notices, markNoticesRead, dismissNotice, me } = useStore()
+  const { t, tl, notices, markNoticesRead, dismissNotice, me, session } = useStore()
+  const ids = new Set([me.id, session?.accountId].filter(Boolean) as string[])
   const myNotices = notices.filter(
-    (n) => (!n.studentId || n.studentId === me.id) && !(n.dismissedBy || []).includes(me.id),
+    (n) => (!n.studentId || ids.has(n.studentId)) && !(n.dismissedBy || []).some((id) => ids.has(id)),
   )
   const icons: Record<string, typeof Bell> = {
     lesson: CalendarClock,

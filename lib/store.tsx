@@ -179,7 +179,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // instructors stay local (seedInstructors / Sabit)
       if (cloud?.notices?.length) setNotices(cloud.notices)
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
-        setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
+        setStudents((prev) => {
+          const merged = mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || [])
+          const sid = session?.accountId
+          const phone = (session?.phone || '').replace(/\D/g, '').slice(-10)
+          if (!sid || phone.length < 10) return merged
+          const approved = merged.find((s) => s.status === 'approved' && s.readyDate && (s.phone || '').replace(/\D/g, '').slice(-10) === phone)
+          if (!approved) return merged
+          return merged.map((s) => s.id === sid ? { ...s, status: 'approved' as const, readyDate: approved.readyDate, updatedAt: approved.updatedAt || s.updatedAt } : s)
+        })
       }
       // theory texts stay local (seedTheory) — skip cloud overwrite to save egress
       // questions loaded from local /questions.json
@@ -237,7 +245,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const cloud = await loadSharedKeys(LIVE_KEYS)
       if (!cloud) return
       if (cloud.students?.length || cloud.deletedStudentIds?.length) {
-        setStudents((prev) => mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || []))
+        setStudents((prev) => {
+          const merged = mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || [])
+          const sid = session?.accountId
+          const phone = (session?.phone || '').replace(/\D/g, '').slice(-10)
+          if (!sid || phone.length < 10) return merged
+          const approved = merged.find((s) => s.status === 'approved' && s.readyDate && (s.phone || '').replace(/\D/g, '').slice(-10) === phone)
+          if (!approved) return merged
+          if (merged.some((s) => s.id === sid && s.readyDate === approved.readyDate && s.status === 'approved')) return merged
+          return merged.map((s) => s.id === sid ? { ...s, status: 'approved' as const, readyDate: approved.readyDate } : s)
+        })
       }
       if (Array.isArray(cloud.notices)) setNotices(cloud.notices)
       if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
@@ -356,9 +373,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const me = useMemo(() => {
     const id = session?.accountId
     const phone = (session?.phone || '').replace(/\D/g, '').slice(-10)
+    const byPhone = phone.length >= 10
+      ? students.filter((s) => (s.phone || '').replace(/\D/g, '').slice(-10) === phone)
+      : []
+    const byId = students.find((s) => s.id === id)
     const found =
-      students.find((s) => s.id === id) ||
-      (phone.length >= 10 ? students.find((s) => (s.phone || '').replace(/\D/g, '').slice(-10) === phone) : undefined)
+      byPhone.find((s) => s.status === 'approved' && s.readyDate) ||
+      (byId?.status === 'approved' && byId.readyDate ? byId : undefined) ||
+      byId ||
+      byPhone[0]
     if (found) {
       return {
         ...found,
