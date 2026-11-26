@@ -705,8 +705,7 @@ export const LIVE_KEYS: SharedKey[] = [
 
 /** Heavy content — load once + rare refresh, never every 15s. */
 export const HEAVY_KEYS: SharedKey[] = [
-  // theory, questions, roadSigns, school stay local (seed + /questions.json + localStorage)
-  'instructors', 'reviews',
+  // school, theory, questions, roadSigns, instructors, reviews stay local
 ]
 
 export const CONTENT_KEYS: SharedKey[] = [

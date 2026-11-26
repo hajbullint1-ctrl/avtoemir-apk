@@ -132,12 +132,12 @@ export const seedSchool: School = {
     ru: 'Автошкола AvtoEmir — обучение вождению категорий A, A1, B, B1, C, C1, E, E1 в Туркестане и Карнаке.',
     kk: 'AvtoEmir автомектебі — Түркістан мен Қарнақта A, A1, B, B1, C, C1, E, E1 санаттары бойынша жүргізуге оқыту.',
   },
-  hours: { ru: 'Пн–Сб 9:00–18:00', kk: 'Дс–Сб 9:00–18:00' },
+  hours: { ru: 'Пн–Пт 9:00–17:00', kk: 'Дс–Жм 9:00–17:00' },
   phones: ['+7 708 342 51 71'],
   phoneEnrollment: '+7 708 342 51 71',
   phoneSupport: '+7 708 342 51 71',
   instagram: 'https://www.instagram.com/avtoshkola_turkestan_avtoemir',
-  website: '',
+  website: 'https://avtoemir.autos/',
   examAddress: DEFAULT_EXAM_ADDRESS,
   routes: seedSchoolRoutes,
   branches: [
@@ -151,7 +151,7 @@ export const seedSchool: School = {
       id: 'karnak',
       city: { ru: 'с. Карнак', kk: 'Қарнақ а.' },
       address: { ru: 'ресторан «Хансарай»', kk: '«Хансарай» рестораны' },
-      link: '',
+      link: 'https://2gis.kz/geo/70030077194336098/68.352463%2C43.515208?m=68.352301%2C43.514411%2F17.78',
     },
   ],
 }
@@ -799,10 +799,10 @@ export const seedInstructors: Instructor[] = [
   {
     id: 'ins-sabit',
     name: 'Сабит',
-    phone: '+7 708 342 51 71',
-    car: 'Toyota Camry',
+    phone: '87718875980',
+    car: 'Nissan Qashqai · 180ABK',
     categories: ['B', 'B1'],
-    slots: ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'],
+    slots: ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'],
   },
 ]
 
