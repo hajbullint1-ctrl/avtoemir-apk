@@ -158,6 +158,13 @@ export function mergeStudents(
         status = 'rejected'
         readyDate = null
       }
+      // Approved certificate date must survive a newer local draft (re-login used to wipe it)
+      const approved = (x: Student) => x.status === 'approved' && !!x.readyDate
+      if (!intentionalEmpty && (approved(s) || approved(prev))) {
+        const src = approved(s) ? s : prev
+        status = 'approved'
+        readyDate = src.readyDate
+      }
 
       const tS = Date.parse(s.updatedAt || '') || 0
       const tP = Date.parse(prev.updatedAt || '') || 0

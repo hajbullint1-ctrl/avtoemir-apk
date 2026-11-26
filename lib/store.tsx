@@ -326,7 +326,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
-      if (Date.now() - lastLive < 60_000) return
       lastLive = Date.now()
       void pullLive()
     }

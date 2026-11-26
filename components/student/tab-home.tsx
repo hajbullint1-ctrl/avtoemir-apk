@@ -162,7 +162,7 @@ export function TabHome() {
           <span className="text-sm font-medium">{statusText}</span>
         </div>
 
-        {me.status === 'approved' && me.readyDate ? (
+        {(me.status === 'approved' || me.readyDate) && me.readyDate ? (
           <div className="mt-3 rounded-xl border border-success/40 bg-success/10 p-3">
             <p className="text-sm font-semibold text-success">
               {tl({ ru: 'Документы подтверждены', kk: 'Құжаттар расталды' })}
