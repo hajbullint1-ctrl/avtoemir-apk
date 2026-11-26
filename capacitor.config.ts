@@ -11,10 +11,11 @@ const config: CapacitorConfig = {
   webDir: 'public',
   server: {
     // Production site — full app + admin + Supabase
-    // ?v=9 forces Android WebView to ignore old cached HTML/JS
-    url: 'https://avtoemir-apk.vercel.app/?v=9',
+    // ?v=10 forces Android WebView to ignore old cached HTML/JS
+    url: 'https://avtoemir-apk.vercel.app/?v=10',
     cleartext: false,
     androidScheme: 'https',
+    allowNavigation: ['avtoemir-apk.vercel.app', '*.supabase.co'],
   },
   android: {
     allowMixedContent: false,
