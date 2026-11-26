@@ -144,8 +144,11 @@ function StudentDetail({ student, account }: { student: Student; account: Accoun
               className="h-10 rounded-lg border bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
           </label>
-          <Button disabled={!date || student.status === 'approved'} onClick={() => date && approveStudent(student.id, date)}>
-            {tl({ ru: 'Подтвердить', kk: 'Растау' })}
+          <Button disabled={!date} onClick={() => date && approveStudent(student.id, date)}>
+            {tl({
+              ru: student.status === 'approved' ? 'Сохранить дату' : 'Подтвердить',
+              kk: student.status === 'approved' ? 'Күнді сақтау' : 'Растау',
+            })}
           </Button>
           <Button
             variant="outline"

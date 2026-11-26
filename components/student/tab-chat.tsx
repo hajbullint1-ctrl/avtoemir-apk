@@ -8,7 +8,7 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 function Chat() {
-  const { t, me, session, instructors, messages, sendMessage } = useStore()
+  const { t, me, session, instructors, messages, sendMessage, deleteMessage } = useStore()
   const threads = [{ id: 'admin', name: t('administration'), sub: 'AvtoEmir' }].concat(
     instructors.map((i) => ({
       id: i.id,
@@ -80,20 +80,33 @@ function Chat() {
           </span>
         </div>
         <div ref={listRef} className="flex h-64 flex-col gap-2 overflow-y-auto p-3" aria-live="polite">
-          {current.map((m) => (
+          {current.map((m) => {
+            const mine = m.fromMe && (!m.studentId || m.studentId === session?.accountId || m.studentId === me.id)
+            return (
             <div
               key={m.id}
               className={cn(
-                'max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                'group relative max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed',
                 m.fromMe ? 'self-end rounded-br-sm bg-primary text-primary-foreground' : 'self-start rounded-bl-sm border bg-card',
               )}
             >
+              {mine ? (
+                <button
+                  type="button"
+                  className="absolute -left-6 top-1 flex size-5 items-center justify-center rounded-full text-muted-foreground hover:text-destructive"
+                  aria-label="Удалить"
+                  onClick={() => deleteMessage(m.id)}
+                >
+                  <X className="size-3.5" />
+                </button>
+              ) : null}
               {m.text}
               <span className={cn('mt-0.5 block text-right text-[10px]', m.fromMe ? 'opacity-75' : 'text-muted-foreground')}>
                 {m.time}
               </span>
             </div>
-          ))}
+            )
+          })}
         </div>
         <form
           className="flex gap-2 border-t p-2"

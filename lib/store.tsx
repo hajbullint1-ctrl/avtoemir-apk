@@ -459,32 +459,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         }
         setSession(r.session)
-        setStudents((list) => {
-          const existing = list.find((s) => s.id === r.session.accountId)
-          if (existing) {
-            if (!existing.name || !existing.phone) {
-              return list.map((s) =>
-                s.id === r.session.accountId
-                  ? { ...s, name: s.name || r.session.fullName, phone: s.phone || r.session.phone }
-                  : s,
-              )
-            }
-            return list
+        // Do not push a local draft over the cloud record (that wiped readyDate).
+        void (async () => {
+          try {
+            const { loadSharedKeys } = await import('./sync')
+            const cloud = await loadSharedKeys(['students', 'deletedStudentIds'])
+            const remote = (cloud?.students || []) as Student[]
+            const cloudMe = remote.find((s) => s.id === r.session.accountId)
+            setStudents((list) => {
+              const existing = list.find((s) => s.id === r.session.accountId)
+              if (cloudMe) {
+                const merged = { ...cloudMe, name: cloudMe.name || r.session.fullName, phone: cloudMe.phone || r.session.phone }
+                return [...list.filter((s) => s.id !== cloudMe.id && s.id !== 'me'), merged]
+              }
+              if (existing) return list
+              const student: Student = {
+                id: r.session.accountId,
+                name: r.session.fullName,
+                phone: r.session.phone,
+                category: 'B',
+                docs: { idFront: null, idBack: null, psycho: null, narco: null },
+                status: 'draft',
+                readyDate: null,
+                submittedAt: null,
+              }
+              return [...list.filter((s) => s.id !== 'me'), student]
+            })
+          } catch (e) {
+            console.warn('[store] login hydrate student:', e)
           }
-          const student: Student = {
-            id: r.session.accountId,
-            name: r.session.fullName,
-            phone: r.session.phone,
-            category: 'B',
-            docs: { idFront: null, idBack: null, psycho: null, narco: null },
-            status: 'draft',
-            readyDate: null,
-            submittedAt: null,
-          }
-          const next = [...list.filter((s) => s.id !== 'me'), student]
-          void saveSharedKey('students', next)
-          return next
-        })
+        })()
       }
       return r.ok ? { ok: true } : { ok: false, error: r.error }
     },
@@ -911,6 +915,14 @@ deleteStudent: (id) => {
     },
     deleteMessage: (id) => {
       setMessages((list) => list.filter((m) => m.id !== id))
+      void (async () => {
+        try {
+          const { saveMessagesMerged } = await import('./sync')
+          await saveMessagesMerged([], [id])
+        } catch (e) {
+          console.warn('[store] deleteMessage:', e)
+        }
+      })()
     },
     deleteChat: (thread, studentId) => {
       setMessages((list) => list.filter((m) => !(m.thread === thread && (!studentId || m.studentId === studentId))))
