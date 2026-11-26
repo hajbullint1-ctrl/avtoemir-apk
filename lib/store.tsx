@@ -228,8 +228,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
     const t = setTimeout(() => {
+      const onAdmin = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
       void saveSharedToCloud({
-        students,
+        ...(onAdmin ? { students } : {}),
         accounts: listAccounts(), recovery: listPasswordRecoveryRequests(),
         learnedSigns, profiles, theoryProgress,
       })
@@ -325,6 +326,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     void pullLive()
+    // APK: pull again whenever the app returns to foreground
+    let removeResume: (() => void) | undefined
+    void import('@capacitor/app').then(({ App }) => App.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) void pullLive()
+    }).then((h) => { removeResume = () => { void h.remove() } })).catch(() => {})
     // Heavy content once per open
     // Heavy content (theory, signs, questions) — max once per 6 hours
     const heavyStamp = Number(localStorage.getItem('ae-heavy-stamp') || 0)
@@ -360,6 +366,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     )
 
     return () => {
+      removeResume?.()
       clearInterval(liveId)
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVisible)
