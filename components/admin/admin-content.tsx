@@ -490,16 +490,15 @@ export function InstructorsEditor() {
 
 export function ReviewsEditor() {
   const { reviews, setReviews, tl } = useStore()
-  useEffect(() => {
-    let stop = false
-    void import('@/lib/sync').then(async ({ loadSharedKeys }) => {
-      const cloud = await loadSharedKeys(['reviews'])
-      if (!stop && Array.isArray(cloud?.reviews)) setReviews(cloud.reviews)
-    })
-    return () => { stop = true }
-  }, [setReviews])
   return (
-    <Card title={tl({ ru: 'Модерация отзывов', kk: 'Пікірлерді модерациялау' })}>
+    <Card title={tl({ ru: 'Модерация отзывов', kk: 'Пікірлерді модерациялау' })} action={
+      <Button variant="outline" size="sm" onClick={() => {
+        void import('@/lib/sync').then(async ({ loadSharedKeys }) => {
+          const cloud = await loadSharedKeys(['reviews'])
+          if (Array.isArray(cloud?.reviews) && cloud.reviews.length) setReviews(cloud.reviews)
+        })
+      }}>{tl({ ru: 'Обновить', kk: 'Жаңарту' })}</Button>
+    }>
       <ul className="flex flex-col gap-2">
         {reviews.map((r) => (
           <li key={r.id} className={cn('flex items-start gap-3 rounded-xl border p-3', !r.visible && 'opacity-60')}>
