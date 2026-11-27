@@ -167,7 +167,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
       const cloud = await loadSharedFromCloud()
-      const schoolCloud = await loadSharedKeys(['school'])
+      const schoolCloud = await loadSharedKeys(['school', 'reviews'])
+      if (Array.isArray(schoolCloud?.reviews)) setReviews(schoolCloud.reviews)
       if (schoolCloud?.school?.name) {
         setSchoolState((prev) => ({
           ...seedSchool,
@@ -509,10 +510,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     instructors,
     setInstructors,
     reviews,
-    setReviews,
+    setReviews: (list) => {
+      setReviews(list)
+      void saveContentListSafe('reviews', list)
+    },
     addReview: (r) => {
-      const item: Review = { ...r, id: uid(), date: nowStamp(), visible: true }
-      setReviews((list) => [item, ...list])
+      const item: Review = { ...r, id: uid(), date: nowStamp(), visible: false }
+      setReviews((list) => {
+        const next = [item, ...list]
+        void saveContentListSafe('reviews', next)
+        return next
+      })
     },
     messages,
     sendMessage: (thread, text) => {
