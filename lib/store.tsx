@@ -27,7 +27,7 @@ import { upsertTheoryProgress, type ProfileRow } from './cloud-features'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 const nowTime = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-const nowStamp = () => new Date().toISOString().slice(0, 16).replace('T', ' ')
+const nowStamp = () => new Date().toISOString()
 
 function ensureTheoryContent(list: TheoryTopic[]): TheoryTopic[] {
   return list.map((t) => {

@@ -192,9 +192,12 @@ export function mergeStudents(
           psycho: s.docs?.psycho ?? null,
           narco: s.docs?.narco ?? null,
         }
-        status = s.status
-        submittedAt = s.submittedAt ?? null
-        readyDate = s.readyDate ?? null
+        // Never let a newer draft/pending wipe an approved certificate date
+        if (!(status === 'approved' && readyDate && s.status !== 'approved')) {
+          status = s.status
+          submittedAt = s.submittedAt ?? null
+          readyDate = s.readyDate ?? null
+        }
       } else if (tP > tS && tP > 0) {
         docs = {
           idFront: prev.docs?.idFront ?? null,
@@ -202,9 +205,11 @@ export function mergeStudents(
           psycho: prev.docs?.psycho ?? null,
           narco: prev.docs?.narco ?? null,
         }
-        status = prev.status
-        submittedAt = prev.submittedAt ?? null
-        readyDate = prev.readyDate ?? null
+        if (!(status === 'approved' && readyDate && prev.status !== 'approved')) {
+          status = prev.status
+          submittedAt = prev.submittedAt ?? null
+          readyDate = prev.readyDate ?? null
+        }
       }
 
       map.set(s.id, {
