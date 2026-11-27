@@ -710,7 +710,7 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
 /** Keys polled often (chat, students, flags). Keep small — no theory/questions. */
 export const LIVE_KEYS: SharedKey[] = [
   'students', 'notices', 'messages', 'droppedMessageIds', 'bookings',
-  'deletedStudentIds', 'maintenanceMode',
+  'deletedStudentIds', 'deletedAccountIds', 'accounts', 'maintenanceMode',
 ]
 
 /** Heavy content — load once + rare refresh, never every 15s. */

@@ -451,7 +451,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStudents((list) => list.map((s) => s.id === id ? { ...s, archived: false, archivedAt: null } : s))
     },
     deleteStudent: (id) => {
-      setStudents((list) => list.filter((s) => s.id !== id))
+      const student = students.find((s) => s.id === id)
+      const phone = (student?.phone || '').replace(/\D/g, '').slice(-10)
+      setStudents((list) => {
+        const next = list.filter((s) => s.id !== id && (phone.length < 10 || (s.phone || '').replace(/\D/g, '').slice(-10) !== phone))
+        void saveStudentsLocalWins(next)
+        return next
+      })
+      const accounts = listAccounts()
+      for (const a of accounts) {
+        const aPhone = (a.phone || '').replace(/\D/g, '').slice(-10)
+        if (a.id === id || (phone.length >= 10 && aPhone === phone)) deleteAccount(a.id)
+      }
+      void saveDeletedBundle({
+        addIds: [id],
+        addRecords: [{
+          id,
+          deletedAt: new Date().toISOString(),
+          student: student || null,
+          account: accounts.find((a) => a.id === id) || null,
+        }],
+      })
+      void saveSharedToCloud({ accounts: listAccounts() })
     },
     purgeApprovedStudents: () => 0,
     deletedRecords,
