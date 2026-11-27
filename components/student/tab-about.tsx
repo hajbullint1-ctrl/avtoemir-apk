@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, MapPin, Phone, Star } from 'lucide-react'
+import { ExternalLink, MapPin, Phone, Star, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Section, Stars } from '@/components/shared/section'
 import { useStore } from '@/lib/store'
@@ -19,7 +19,7 @@ const steps = [
 ]
 
 export function TabAbout() {
-  const { t, tl, lang, school, reviews, addReview } = useStore()
+  const { t, tl, lang, school, reviews, addReview, setReviews, me } = useStore()
   const [open, setOpen] = useState(false)
   const [author, setAuthor] = useState('')
   const [text, setText] = useState('')
@@ -98,21 +98,42 @@ export function TabAbout() {
       </Section>
 
       <Section title={t('reviews')}>
-        {visible.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{tl({ ru: 'Пока нет отзывов', kk: 'Әзірге пікір жоқ' })}</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {visible.map((r) => (
-              <li key={r.id} className="rounded-xl border p-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{r.author}</span>
-                  <Stars value={r.rating} size="size-3.5" />
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{r.text}</p>
-              </li>
-            ))}
-          </ul>
-        )}
+        {(() => {
+          const mine = reviews.filter((r) => r.studentId && r.studentId === me.id)
+          const shown = reviews.filter((r) => r.visible || (r.studentId && r.studentId === me.id))
+          if (shown.length === 0) {
+            return <p className="text-sm text-muted-foreground">{tl({ ru: 'Пока нет отзывов', kk: 'Әзірге пікір жоқ' })}</p>
+          }
+          return (
+            <ul className="flex flex-col gap-2">
+              {shown.map((r) => {
+                const own = r.studentId === me.id
+                return (
+                  <li key={r.id} className="rounded-xl border p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{r.author}</span>
+                      <Stars value={r.rating} size="size-3.5" />
+                      {own && !r.visible && (
+                        <span className="text-[11px] text-muted-foreground">{tl({ ru: 'на модерации', kk: 'модерацияда' })}</span>
+                      )}
+                      {own && (
+                        <button
+                          type="button"
+                          className="ml-auto rounded-md p-1 text-muted-foreground hover:text-destructive"
+                          aria-label={tl({ ru: 'Удалить отзыв', kk: 'Пікірді жою' })}
+                          onClick={() => setReviews(reviews.filter((x) => x.id !== r.id))}
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{r.text}</p>
+                  </li>
+                )
+              })}
+            </ul>
+          )
+        })()}
         <Button className="mt-3 w-full" variant="outline" onClick={() => setOpen(true)}>
           {t('addReview')}
         </Button>

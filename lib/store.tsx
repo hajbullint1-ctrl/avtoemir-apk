@@ -515,7 +515,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void saveContentListSafe('reviews', list)
     },
     addReview: (r) => {
-      const item: Review = { ...r, id: uid(), date: nowStamp(), visible: false }
+      const item: Review = { ...r, id: uid(), date: nowStamp(), visible: false, studentId: me.id }
       setReviews((list) => {
         const next = [item, ...list]
         void saveContentListSafe('reviews', next)

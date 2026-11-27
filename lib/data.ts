@@ -51,7 +51,7 @@ export type TheoryLesson = { id: string; title: L; body: L; imageUrl?: string | 
 export type TheoryTopic = { id: string; title: L; lessons: number; done: number; content?: TheoryLesson[]; category?: L }
 export type Question = { id: string; q: L; options: L[]; correct: number; explain: L; imageUrl?: string | null }
 export type Instructor = { id: string; name: string; phone: string; car: string; categories: Category[]; slots: string[] }
-export type Review = { id: string; author: string; rating: number; text: string; date: string; visible: boolean }
+export type Review = { id: string; author: string; rating: number; text: string; date: string; visible: boolean; studentId?: string }
 export type Message = {
   id: string
   thread: string
