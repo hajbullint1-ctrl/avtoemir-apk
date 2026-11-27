@@ -146,19 +146,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSession(loadSession())
     const p = loadPersisted()
     if (p) {
-      if (Array.isArray(p.students)) setStudents(p.students as Student[])
+      // Live keys (students/readyDate, notices, bookings, messages) are NOT restored from localStorage.
+      // They come from cloud so stale APK/site cache cannot mask or override fresh data.
+      // Keep offline content that would otherwise hit egress: questions, theory, school, road signs.
       setSchoolState(seedSchool)
       setTheory(seedTheory)
       if (Array.isArray(p.questions) && p.questions.length) setQuestions(p.questions as Question[])
       else setQuestions(seedQuestions)
       setInstructors(seedInstructors)
       setReviews(seedReviews)
-      if (Array.isArray(p.messages)) setMessages(p.messages as Message[])
-      if (Array.isArray(p.notices)) setNotices(p.notices as Notice[])
-      if (Array.isArray(p.bookings)) setBookings(p.bookings as Booking[])
-      if (Array.isArray(p.results)) setResults(p.results as TestResult[])
-      if (p.learnedSigns && typeof p.learnedSigns === "object" && !Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as Record<string, string[]>)
       setRoadSigns(seedRoadSigns)
+      if (p.learnedSigns && typeof p.learnedSigns === "object" && !Array.isArray(p.learnedSigns)) setLearnedSigns(p.learnedSigns as Record<string, string[]>)
       if (Array.isArray(p.profiles)) setProfiles(p.profiles as ProfileRow[])
       if (p.theoryProgress && typeof p.theoryProgress === 'object') setTheoryProgress(p.theoryProgress as Record<string, string[]>)
     }
@@ -169,7 +167,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
       const cloud = await loadSharedFromCloud()
-      if (cloud?.notices?.length) setNotices(cloud.notices)
+      if (Array.isArray(cloud?.notices)) setNotices(cloud.notices)
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
         setStudents((prev) => {
           const merged = mergeStudents(prev, cloud.students || [], cloud.deletedStudentIds || [])
