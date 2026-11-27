@@ -16,8 +16,8 @@ import {
 } from './auth'
 import { loadPersisted, savePersisted } from './persist'
 import {
-  isSupabaseConfigured, loadMessagesBundle, loadSharedFromCloud, saveSharedKey, saveSharedToCloud,
-  mergeById, mergeStudents, mergeStringLists, mergeProgressMaps, loadSharedKeys, LIVE_KEYS, HEAVY_KEYS,
+  isSupabaseConfigured, loadSharedFromCloud, saveSharedToCloud,
+  mergeById, mergeStudents, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
   saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe, saveNoticesMerged, saveContentListSafe,
   type DeletedRecord,
 } from './sync'
@@ -212,10 +212,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return
     savePersisted({
-      students, school, theory, questions, instructors, reviews, messages, notices,
-      bookings, results, learnedSigns, profiles, theoryProgress, roadSigns,
+      questions, learnedSigns, profiles, theoryProgress,
     })
-  }, [ready, students, school, theory, questions, instructors, reviews, messages, notices, bookings, results, learnedSigns, profiles, theoryProgress, roadSigns])
+  }, [ready, questions, learnedSigns, profiles, theoryProgress])
 
   useEffect(() => {
     if (!ready || !isSupabaseConfigured) return
@@ -273,66 +272,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (typeof cloud.maintenanceMode === 'boolean') setMaintenanceModeState(cloud.maintenanceMode)
     }
 
-    const ADMIN_STAMP_KEY = 'ae-admin-content-stamp'
-    const pullAdminContent = async () => {
-      const cloud = await loadSharedKeys(['school', 'instructors'])
-      if (!cloud) return
-      if (cloud.school?.name && cloud.school.hours?.ru && cloud.school.website) {
-        setSchoolState((prev) => ({
-          ...seedSchool,
-          ...cloud.school!,
-          hours: cloud.school!.hours?.ru ? cloud.school!.hours : seedSchool.hours,
-          website: cloud.school!.website || seedSchool.website,
-          instagram: cloud.school!.instagram || seedSchool.instagram,
-          branches: cloud.school!.branches?.length ? cloud.school!.branches : seedSchool.branches,
-          routes: cloud.school!.routes?.length ? cloud.school!.routes : seedSchool.routes,
-        }))
-      }
-      if (Array.isArray(cloud.instructors) && cloud.instructors.some((i) => i.phone === '87718875980' || (i.car || '').includes('180ABK'))) {
-        setInstructors(cloud.instructors)
-      }
-    }
-    const adminStamp = Number(localStorage.getItem(ADMIN_STAMP_KEY) || 0)
-    if (Date.now() - adminStamp > 60 * 60 * 1000) {
-      void pullAdminContent().then(() => localStorage.setItem(ADMIN_STAMP_KEY, String(Date.now())))
+    // Content (school, theory, signs, questions) stays on local seeds — never pulled.
+    try {
+      localStorage.removeItem('ae-admin-content-stamp')
+      localStorage.removeItem('ae-heavy-stamp')
+      localStorage.removeItem('avtoemir.store')
+    } catch { /* ignore */ }
+
+    let pulling = false
+    const pullOnce = async () => {
+      if (pulling) return
+      pulling = true
+      try { await pullLive() } finally { pulling = false }
     }
 
-    const pullHeavy = async () => {
-      const cloud = await loadSharedKeys(HEAVY_KEYS)
-      if (!cloud) return
-      setInstructors((prev) => (prev.length ? prev : seedInstructors))
-      setTheory((prev) => {
-        const seedIds = new Set(seedTheory.map((t) => t.id))
-        const extras = prev.filter((t) => !seedIds.has(t.id))
-        return [...seedTheory, ...extras]
-      })
-      setReviews(seedReviews)
-      setRoadSigns(seedRoadSigns)
-      if (Array.isArray(cloud.deletedRecords)) setDeletedRecords(cloud.deletedRecords)
-    }
-
-    void pullLive()
+    void pullOnce()
     let removeResume: (() => void) | undefined
     void import('@capacitor/app').then(({ App }) => App.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) void pullLive()
+      if (isActive) void pullOnce()
     }).then((h) => { removeResume = () => { void h.remove() } })).catch(() => {})
-    const heavyStamp = Number(localStorage.getItem('ae-heavy-stamp') || 0)
-    if (Date.now() - heavyStamp > 6 * 60 * 60 * 1000) {
-      void pullHeavy().then(() => localStorage.setItem('ae-heavy-stamp', String(Date.now())))
-    }
 
-    let lastLive = Date.now()
     const liveId = setInterval(() => {
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
-        lastLive = Date.now()
-        void pullLive()
+        void pullOnce()
       }
-    }, 15_000)
+    }, 60_000)
 
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return
-      lastLive = Date.now()
-      void pullLive()
+      void pullOnce()
     }
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onVisible)
@@ -343,7 +311,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ['messages', 'notices', 'students', 'bookings', 'maintenanceMode', 'registrationRequests'],
       () => {
         if (rtTimer) clearTimeout(rtTimer)
-        rtTimer = setTimeout(() => { void pullLive() }, 2500)
+        rtTimer = setTimeout(() => { void pullOnce() }, 2500)
       },
     )
 
