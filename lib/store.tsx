@@ -567,11 +567,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     notices,
     markNoticesRead: () => {
-      const id = session?.accountId
-      if (!id) return
+      const ids = new Set([session?.accountId, me.id].filter(Boolean) as string[])
       setNotices((list) => {
         const next = list.map((n) =>
-          n.studentId === id || !n.studentId ? { ...n, read: true } : n,
+          !n.studentId || ids.has(n.studentId) ? { ...n, read: true } : n,
         )
         void (async () => {
           try {
