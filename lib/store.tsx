@@ -427,7 +427,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStudents((list) => list.map((s) => s.id === me.id ? { ...s, status: 'pending', submittedAt: nowStamp() } : s))
     },
     approveStudent: (id, readyDate) => {
-      setStudents((list) => list.map((s) => s.id === id ? { ...s, status: 'approved', readyDate, updatedAt: nowStamp() } : s))
+      const stamp = nowStamp()
+      setStudents((list) => {
+        const next = list.map((s) => s.id === id ? { ...s, status: 'approved' as const, readyDate, updatedAt: stamp } : s)
+        // Force write so a concurrent pullLive cannot drop the new date
+        void saveStudentsLocalWins(next)
+        return next
+      })
+      const student = students.find((s) => s.id === id)
+      const notice: Notice = {
+        id: `n_cert_${id}_${Date.now().toString(36)}`,
+        studentId: id,
+        kind: 'docs',
+        title: { ru: 'Дата сертификата', kk: 'Сертификат күні' },
+        body: {
+          ru: `${student?.name || ''}: сертификат будет готов ${readyDate}`.trim(),
+          kk: `${student?.name || ''}: сертификат дайын болады ${readyDate}`.trim(),
+        },
+        time: stamp,
+        read: false,
+      }
+      setNotices((list) => [notice, ...list].slice(0, 200))
+      void saveNoticesMerged([notice])
     },
     rejectStudent: (id) => {
       setStudents((list) => list.map((s) => s.id === id ? { ...s, status: 'rejected', readyDate: null, updatedAt: nowStamp() } : s))
