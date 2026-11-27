@@ -18,7 +18,7 @@ import { loadPersisted, savePersisted } from './persist'
 import {
   isSupabaseConfigured, loadSharedFromCloud, saveSharedToCloud,
   mergeById, mergeStudents, mergeProgressMaps, loadSharedKeys, LIVE_KEYS,
-  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe, saveNoticesMerged, saveContentListSafe,
+  saveStudentsLocalWins, forceSaveResults, saveSchoolMerged, saveDeletedBundle, subscribeAppState, saveBookingsMerged, saveMessagesMerged, saveInstructorsSafe, saveNoticesMerged, saveContentListSafe, saveReviewsMerged, saveReviewsReplace,
   type DeletedRecord,
 } from './sync'
 import { hydrateMistakes } from './mistakes'
@@ -267,6 +267,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
       }
       if (Array.isArray(cloud.notices)) setNotices(cloud.notices)
+      if (Array.isArray(cloud.reviews)) setReviews(cloud.reviews)
       if (Array.isArray(cloud.bookings)) setBookings(cloud.bookings)
       if (cloud.messages) {
         const dropped = new Set(cloud.droppedMessageIds || [])
@@ -512,13 +513,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     reviews,
     setReviews: (list) => {
       setReviews(list)
-      void saveContentListSafe('reviews', list)
+      void saveReviewsReplace(list)
     },
     addReview: (r) => {
       const item: Review = { ...r, id: uid(), date: nowStamp(), visible: false, studentId: me.id }
       setReviews((list) => {
         const next = [item, ...list]
-        void saveContentListSafe('reviews', next)
+        void saveReviewsMerged(next)
         return next
       })
     },

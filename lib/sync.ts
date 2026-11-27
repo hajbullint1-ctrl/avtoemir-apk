@@ -683,6 +683,23 @@ export async function saveMergedById<T extends { id: string }>(key: SharedKey, l
   return merged
 }
 
+export async function saveReviewsMerged(local: Review[]): Promise<Review[]> {
+  const cloud = await loadSharedKeys(['reviews'])
+  const remote = (cloud?.reviews || []) as Review[]
+  const map = new Map<string, Review>()
+  for (const r of remote) if (r?.id) map.set(r.id, r)
+  for (const r of local) if (r?.id) map.set(r.id, { ...(map.get(r.id) || {}), ...r })
+  const merged = [...map.values()]
+  await saveSharedKey('reviews', merged)
+  return merged
+}
+
+/** Admin list is the full set: supports hide and delete. */
+export async function saveReviewsReplace(local: Review[]): Promise<Review[]> {
+  await saveSharedKey('reviews', local)
+  return local
+}
+
 export async function saveInstructorsSafe(local: Instructor[]): Promise<Instructor[]> {
   return saveContentListSafe('instructors', local)
 }
@@ -709,7 +726,7 @@ export async function saveContentListSafe<T extends { id: string }>(key: SharedK
 
 /** Keys polled often (chat, students, flags). Keep small — no theory/questions. */
 export const LIVE_KEYS: SharedKey[] = [
-  'students', 'notices', 'messages', 'droppedMessageIds', 'bookings',
+  'students', 'notices', 'messages', 'droppedMessageIds', 'bookings', 'reviews',
   'deletedStudentIds', 'deletedAccountIds', 'accounts', 'maintenanceMode',
 ]
 
