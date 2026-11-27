@@ -3,7 +3,7 @@
   "appName": "AvtoEmir",
   "webDir": "public",
   "server": {
-    "url": "https://avtoemir-apk.vercel.app",
+    "url": "https://avtoemir-apk.vercel.app/?v=20",
     "cleartext": false,
     "androidScheme": "https",
     "allowNavigation": ["avtoemir-apk.vercel.app", "*.supabase.co"]

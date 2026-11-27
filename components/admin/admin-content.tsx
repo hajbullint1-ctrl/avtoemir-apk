@@ -490,6 +490,14 @@ export function InstructorsEditor() {
 
 export function ReviewsEditor() {
   const { reviews, setReviews, tl } = useStore()
+  useEffect(() => {
+    let stop = false
+    void import('@/lib/sync').then(async ({ loadSharedKeys }) => {
+      const cloud = await loadSharedKeys(['reviews'])
+      if (!stop && Array.isArray(cloud?.reviews)) setReviews(cloud.reviews)
+    })
+    return () => { stop = true }
+  }, [setReviews])
   return (
     <Card title={tl({ ru: 'Модерация отзывов', kk: 'Пікірлерді модерациялау' })}>
       <ul className="flex flex-col gap-2">

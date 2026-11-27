@@ -322,7 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     let rtTimer: ReturnType<typeof setTimeout> | null = null
     const unsub = subscribeAppState(
-      ['messages', 'notices', 'students', 'bookings', 'maintenanceMode', 'registrationRequests'],
+      ['messages', 'notices', 'students', 'bookings', 'reviews', 'maintenanceMode', 'registrationRequests'],
       () => {
         if (rtTimer) clearTimeout(rtTimer)
         rtTimer = setTimeout(() => { void pullOnce() }, 2500)
@@ -519,7 +519,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const item: Review = { ...r, id: uid(), date: nowStamp(), visible: false, studentId: me.id }
       setReviews((list) => {
         const next = [item, ...list]
-        void saveReviewsMerged(next)
+        void (async () => {
+          const saved = await saveReviewsMerged(next)
+          const ok = saved.some((x) => x.id === item.id)
+          if (!ok && typeof window !== 'undefined') {
+            window.alert('Отзыв не сохранился в облако. Проверьте интернет и отправьте ещё раз.')
+          }
+        })()
         return next
       })
     },

@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
   webDir: 'public',
   server: {
     // Production site — full app + admin + Supabase
-    url: 'https://avtoemir-apk.vercel.app',
+    url: 'https://avtoemir-apk.vercel.app/?v=20',
     cleartext: false,
     androidScheme: 'https',
     allowNavigation: ['avtoemir-apk.vercel.app', '*.supabase.co'],

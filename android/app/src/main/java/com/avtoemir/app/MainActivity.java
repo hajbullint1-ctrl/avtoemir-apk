@@ -9,7 +9,7 @@ import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    private static final String LIVE = "https://avtoemir-apk.vercel.app/?apk=13";
+    private static final String LIVE = "https://avtoemir-apk.vercel.app/?v=20";
     private boolean opened;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
