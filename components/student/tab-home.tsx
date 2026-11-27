@@ -87,9 +87,15 @@ export function TabHome() {
       </section>
 
       {(() => {
-        const myNotices = notices.filter(
-          (n) => (!n.studentId || n.studentId === me.id) && !(n.dismissedBy || []).includes(me.id),
-        ).slice(0, 5)
+        const phone = (me.phone || '').replace(/\D/g, '').slice(-10)
+        const myNotices = notices.filter((n) => {
+          if ((n.dismissedBy || []).includes(me.id)) return false
+          if (!n.studentId) return true
+          if (n.studentId === me.id) return true
+          // Match by phone so APK sees notices even if account id differs from student record
+          if (phone.length >= 10 && (n.body?.ru || '').includes(phone)) return true
+          return false
+        }).slice(0, 5)
         if (myNotices.length === 0) return null
         return (
           <Section title={tl({ ru: 'Уведомления', kk: 'Хабарландырулар' })}>
@@ -98,7 +104,7 @@ export function TabHome() {
                 <li key={n.id} className="rounded-xl border bg-card p-3 text-sm">
                   <p className="font-semibold">{tl(n.title)}</p>
                   <p className="mt-1 text-muted-foreground">{tl(n.body)}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{n.time}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{n.time?.includes('T') ? new Date(n.time).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : n.time}</p>
                 </li>
               ))}
             </ul>
@@ -169,8 +175,8 @@ export function TabHome() {
             </p>
             <p className="mt-1 text-sm">
               {tl({
-                ru: `Сертификат будет готов: ${me.readyDate}`,
-                kk: `Сертификат дайын болады: ${me.readyDate}`,
+                ru: `Сертификат будет готов: ${(() => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(me.readyDate || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : me.readyDate })()}`,
+                kk: `Сертификат дайын болады: ${(() => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(me.readyDate || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : me.readyDate })()}`,
               })}
             </p>
             <div className="mt-2">

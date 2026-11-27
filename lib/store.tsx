@@ -428,27 +428,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     approveStudent: (id, readyDate) => {
       const stamp = nowStamp()
+      const student = students.find((s) => s.id === id)
+      const who = [student?.name, student?.phone].filter(Boolean).join(' · ') || 'Ученик'
+      const pretty = (() => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(readyDate || '')
+        return m ? `${m[3]}.${m[2]}.${m[1]}` : readyDate
+      })()
       setStudents((list) => {
         const next = list.map((s) => s.id === id ? { ...s, status: 'approved' as const, readyDate, updatedAt: stamp } : s)
-        // Force write so a concurrent pullLive cannot drop the new date
         void saveStudentsLocalWins(next)
         return next
       })
-      const student = students.find((s) => s.id === id)
-      const notice: Notice = {
-        id: `n_cert_${id}_${Date.now().toString(36)}`,
-        studentId: id,
-        kind: 'docs',
-        title: { ru: 'Дата сертификата', kk: 'Сертификат күні' },
-        body: {
-          ru: `${student?.name || ''}: сертификат будет готов ${readyDate}`.trim(),
-          kk: `${student?.name || ''}: сертификат дайын болады ${readyDate}`.trim(),
-        },
-        time: stamp,
-        read: false,
-      }
-      setNotices((list) => [notice, ...list].slice(0, 200))
-      void saveNoticesMerged([notice])
+      setNotices((list) => {
+        const recent = list.find((n) => n.kind === 'docs' && n.studentId === id && (n.body?.ru || '').includes(pretty) && Date.now() - Date.parse(n.time || '') < 60_000)
+        if (recent) return list
+        const notice: Notice = {
+          id: `n_cert_${id}_${Date.now().toString(36)}`,
+          studentId: id,
+          kind: 'docs',
+          title: { ru: 'Дата сертификата', kk: 'Сертификат күні' },
+          body: {
+            ru: `${who}: сертификат будет готов ${pretty}`,
+            kk: `${who}: сертификат дайын болады ${pretty}`,
+          },
+          time: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          read: false,
+        }
+        void saveNoticesMerged([notice])
+        return [notice, ...list].slice(0, 200)
+      })
     },
     rejectStudent: (id) => {
       setStudents((list) => list.map((s) => s.id === id ? { ...s, status: 'rejected', readyDate: null, updatedAt: nowStamp() } : s))
@@ -630,20 +638,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const item: Booking = { ...b, id: uid() }
       setBookings((list) => [...list, item])
       if (item.studentId) {
-        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+        const who = [item.studentName, item.studentPhone].filter(Boolean).join(' · ') || 'Ученик'
+        const pretty = (() => {
+          const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(item.date || '')
+          return m ? `${m[3]}.${m[2]}.${m[1]}` : item.date
+        })()
         const notice = {
-          id: `n_book_${item.id}_${Date.now().toString(36)}`,
+          id: `n_book_${item.id}`,
           kind: 'lesson' as const,
-          title: { ru: 'Новая запись на вождение', kk: 'Жаңа жүргізуге жазылу' },
+          title: { ru: 'Запись на вождение', kk: 'Жүргізуге жазылу' },
           body: {
-            ru: `Вы записаны на ${item.date} в ${item.time}.`,
-            kk: `Сіз ${item.date} сағат ${item.time}-ге жазылдыңыз.`,
+            ru: `${who}: запись на ${pretty} в ${item.time}`,
+            kk: `${who}: ${pretty} сағат ${item.time}-ге жазылу`,
           },
-          time: stamp,
+          time: new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           read: false,
           studentId: item.studentId,
         }
-        setNotices((list) => [notice, ...list])
+        setNotices((list) => list.some((n) => n.id === notice.id) ? list : [notice, ...list])
         void (async () => {
           try {
             const { saveBookingsMerged, saveNoticesMerged } = await import('./sync')
