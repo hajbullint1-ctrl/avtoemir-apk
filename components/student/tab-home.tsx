@@ -22,7 +22,7 @@ const categoryLabel: Record<Category, DictKey> = {
 }
 
 export function TabHome() {
-  const { t, tl, me, school, setCategory, deleteMyAccount, notices } = useStore()
+  const { t, tl, me, school, setCategory, deleteMyAccount, notices, session } = useStore()
 
   const statusIcon =
     me.status === 'approved' ? (
@@ -87,13 +87,16 @@ export function TabHome() {
       </section>
 
       {(() => {
+        const ids = new Set([me.id, session?.accountId].filter(Boolean) as string[])
         const phone = (me.phone || '').replace(/\D/g, '').slice(-10)
         const myNotices = notices.filter((n) => {
-          if ((n.dismissedBy || []).includes(me.id)) return false
+          if ((n.dismissedBy || []).some((id) => ids.has(id))) return false
+          const title = (n.title?.ru || '').trim()
+          const body = (n.body?.ru || '').trim()
+          if (!title && !body) return false
           if (!n.studentId) return true
-          if (n.studentId === me.id) return true
-          // Match by phone so APK sees notices even if account id differs from student record
-          if (phone.length >= 10 && (n.body?.ru || '').includes(phone)) return true
+          if (ids.has(n.studentId)) return true
+          if (phone.length >= 10 && body.includes(phone)) return true
           return false
         }).slice(0, 5)
         if (myNotices.length === 0) return null

@@ -11,8 +11,7 @@ const config: CapacitorConfig = {
   webDir: 'public',
   server: {
     // Production site — full app + admin + Supabase
-    // ?apk=18 forces Android WebView to ignore old cached HTML/JS after sync fixes
-    url: 'https://avtoemir-apk.vercel.app/?apk=18',
+    url: 'https://avtoemir-apk.vercel.app',
     cleartext: false,
     androidScheme: 'https',
     allowNavigation: ['avtoemir-apk.vercel.app', '*.supabase.co'],

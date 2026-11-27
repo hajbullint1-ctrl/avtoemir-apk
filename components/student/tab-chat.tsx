@@ -140,9 +140,13 @@ function Chat() {
 function Notifications() {
   const { t, tl, notices, markNoticesRead, dismissNotice, me, session } = useStore()
   const ids = new Set([me.id, session?.accountId].filter(Boolean) as string[])
-  const myNotices = notices.filter(
-    (n) => (!n.studentId || ids.has(n.studentId)) && !(n.dismissedBy || []).some((id) => ids.has(id)),
-  )
+  const myNotices = notices.filter((n) => {
+    if ((n.dismissedBy || []).some((id) => ids.has(id))) return false
+    const title = (n.title?.ru || '').trim()
+    const body = (n.body?.ru || '').trim()
+    if (!title && !body) return false
+    return !n.studentId || ids.has(n.studentId)
+  })
   const icons: Record<string, typeof Bell> = {
     lesson: CalendarClock,
     docs: FileCheck2,
@@ -162,16 +166,14 @@ function Notifications() {
         </span>
       }
       action={
-        unread > 0 ? (
-          <button
-            type="button"
-            onClick={markNoticesRead}
-            className="rounded-md px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
-            aria-label={tl({ ru: 'Отметить все прочитанными', kk: 'Барлығын оқылған деп белгілеу' })}
-          >
-            ✓✓
-          </button>
-        ) : undefined
+        <button
+          type="button"
+          onClick={markNoticesRead}
+          className="rounded-md px-2 py-1 text-sm font-semibold text-primary hover:bg-primary/10"
+          aria-label={tl({ ru: 'Отметить все прочитанными', kk: 'Барлығын оқылған деп белгілеу' })}
+        >
+          ✓✓
+        </button>
       }
     >
       <ul className="flex flex-col gap-2">

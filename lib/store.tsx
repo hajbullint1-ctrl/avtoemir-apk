@@ -585,11 +585,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     },
     dismissNotice: (noticeId) => {
-      const meId = session?.accountId
-      if (!meId) return
+      const ids = [session?.accountId, me.id].filter(Boolean) as string[]
+      if (!ids.length) return
       setNotices((list) => {
         const next = list.map((n) =>
-          n.id === noticeId ? { ...n, dismissedBy: [...(n.dismissedBy || []), meId] } : n
+          n.id === noticeId ? { ...n, dismissedBy: [...new Set([...(n.dismissedBy || []), ...ids])] } : n
         )
         void (async () => {
           try {
