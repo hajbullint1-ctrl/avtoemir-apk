@@ -136,7 +136,7 @@ export const seedSchool: School = {
   phones: ['+7 708 342 51 71'],
   phoneEnrollment: '+7 708 342 51 71',
   phoneSupport: '87073060462',
-  instagram: 'https://www.instagram.com/avtoshkola_turkestan_avtoemir',
+  instagram: 'https://www.instagram.com/avtoshkola_avtoemir',
   website: 'https://avtoemir.autos/',
   examAddress: DEFAULT_EXAM_ADDRESS,
   routes: seedSchoolRoutes,

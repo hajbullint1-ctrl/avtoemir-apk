@@ -167,6 +167,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return
       }
       const cloud = await loadSharedFromCloud()
+      const schoolCloud = await loadSharedKeys(['school'])
+      if (schoolCloud?.school?.name) {
+        setSchoolState((prev) => ({
+          ...seedSchool,
+          ...schoolCloud.school!,
+          hours: schoolCloud.school!.hours?.ru ? schoolCloud.school!.hours : seedSchool.hours,
+          website: schoolCloud.school!.website || seedSchool.website,
+          instagram: schoolCloud.school!.instagram || seedSchool.instagram,
+          branches: schoolCloud.school!.branches?.length ? schoolCloud.school!.branches : seedSchool.branches,
+          routes: schoolCloud.school!.routes?.length ? schoolCloud.school!.routes : seedSchool.routes,
+        }))
+      }
       if (Array.isArray(cloud?.notices)) setNotices(cloud.notices)
       if (cloud?.students?.length || cloud?.deletedStudentIds?.length) {
         setStudents((prev) => {
@@ -454,7 +466,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDeletedRecords((list) => list.filter((r) => r.id !== id))
     },
     school,
-    setSchool: (s) => setSchoolState(s),
+    setSchool: (s) => {
+      setSchoolState(s)
+      void saveSchoolMerged(s)
+    },
     theory,
     setTheory,
     profiles,
